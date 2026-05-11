@@ -14,7 +14,7 @@ In v0, the PC performs raw historical data parsing and converts relevant market-
 
 The FPGA receives the normalized protocol, not raw NASDAQ ITCH messages.
 
-Reason being:
+Reason:
 1. Raw ITCH order-book reconstruction is a larger memory-architecture problem.
 2. Normalized messages let the FPGA project focus first on deterministic packet processing, state update, risk checking, and latency measurement.
 3. The design can later be extended by replacing the host normalizer with an FPGA raw-ITCH parser.
