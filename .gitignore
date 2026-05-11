@@ -1,0 +1,47 @@
+# OS/editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+
+# C/C++ build outputs
+build/
+*.o
+*.out
+*.exe
+
+# Vivado / FPGA generated files
+*.jou
+*.log
+*.str
+*.tmp
+*.backup*
+*.cache/
+*.hw/
+*.ip_user_files/
+*.sim/
+*.runs/
+*.gen/
+*.Xil/
+*.bit
+*.ltx
+
+# Waveforms / simulation outputs
+*.vcd
+*.fst
+*.wdb
+
+# Large data files
+data/raw/
+data/itch/
+*.pcap
+*.pcapng
+*.csv
+*.parquet
