@@ -59,7 +59,7 @@ The ITCH message decoder converts raw ITCH message payloads into typed host-side
 
 Necessary ITCH message types for v0:
 | ITCH type | Meaning |
-|---|---|
+|:-:|---|
 | `S` | System Event |
 | `R` | Stock Directory |
 | `H` | Stock Trading Action |
