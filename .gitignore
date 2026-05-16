@@ -17,7 +17,7 @@ build/
 *.out
 *.exe
 
-# Vivado / FPGA generated files
+# Vivado generated files
 *.jou
 *.log
 *.str
@@ -40,8 +40,12 @@ build/
 
 # Large data files
 data/raw/
-data/itch/
 *.pcap
 *.pcapng
 *.csv
 *.parquet
+*.gz
+
+
+# Folder for .txt files used for notekeeping and stuff
+planning
