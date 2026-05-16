@@ -5,18 +5,29 @@ The host software is responsible for reading historical NASDAQ ITCH data, derivi
 
 Note: The internal wire format itself is defined separately in `docs/internal_protocol_v0.md`.
 
+
 ## Pipeline Overview
 
-```text
-Historical ITCH file
-    -> ITCH file reader
-    -> ITCH message decoder
-    -> software book builder / top-of-book extractor
-    -> internal protocol message generator
-    -> outbound sequencer
-    -> 32-byte protocol encoder
-    -> UDP batcher / sender
-    -> FPGA
+```mermaid
+flowchart TB
+    A[Historical ITCH file]
+    B[ITCH file reader]
+    C[ITCH message decoder]
+    D[Order book builder / TOB extractor]
+    E[Internal message generator]
+    F[Outbound sequencer]
+    G[32-byte protocol encoder]
+    H[UDP batcher / sender]
+    I[FPGA]
+
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    F --> G
+    G --> H
+    H --> I
 ```
 
 ## Responsibilities
