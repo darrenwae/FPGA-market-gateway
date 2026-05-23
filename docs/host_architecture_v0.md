@@ -57,7 +57,7 @@ ITCH_message_payload: Read exactly that many ITCH payload bytes following the `m
 ### 2. ITCH Message Decoder
 The ITCH message decoder converts raw ITCH message payloads into typed host-side event objects.
 
-Necessary ITCH message types for v0:
+Relevant ITCH message types for v0:
 | ITCH type | Meaning |
 |:-:|---|
 | `S` | System Event |
@@ -72,7 +72,7 @@ Necessary ITCH message types for v0:
 | `U` | Order Replace |
 
 The decoder should only decode raw ITCH semantics.
-Unsupported ITCH message types may be ignored, provided they are not needed for v0 top-of-book generation.
+v0 supports only the aforementioned ITCH message types required for session state, symbol state, and top-of-book generation. Other ITCH message types are reported as `UnsupportedMessageType` and may be ignored by the downstream host pipeline.
 
 ### 3. Symbol Directory
 
