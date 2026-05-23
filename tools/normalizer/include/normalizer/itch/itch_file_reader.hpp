@@ -1,17 +1,10 @@
 #pragma once
-#include <cstddef>
-#include <cstdint>
+#include "normalizer/itch/raw_message.hpp"
 #include <filesystem>
 #include <fstream>
-#include <array>
+
 
 namespace normalizer::itch {
-    struct RawMessage {
-        static constexpr std::size_t MaxPayload = 64;
-        std::array<std::uint8_t, MaxPayload> payload{};
-        std::uint16_t length{0};
-    };
-
     enum class ReadStatus {
         Ok, 
         EndOfFile, 
