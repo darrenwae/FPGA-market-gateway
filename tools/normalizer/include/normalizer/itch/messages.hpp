@@ -7,8 +7,7 @@
 namespace normalizer::itch
 {
 
-    enum class MessageType : char
-    {
+    enum class MessageType : char {
         SystemEvent = 'S',
         StockDirectory = 'R',
         StockTradingAction = 'H',
@@ -21,8 +20,7 @@ namespace normalizer::itch
         OrderReplace = 'U',
     };
 
-    enum class EventCode : char
-    {
+    enum class EventCode : char {
         StartOfMessages = 'O',
         StartOfSystemHours = 'S',
         StartOfMarketHours = 'Q',
@@ -31,22 +29,19 @@ namespace normalizer::itch
         EndOfMessages = 'C',
     };
 
-    enum class TradingState : char
-    {
+    enum class TradingState : char {
         Halted = 'H',
         Paused = 'P',
         QuotationOnly = 'Q',
         Trading = 'T',
     };
 
-    enum class BuySellIndicator : char
-    {
+    enum class BuySellIndicator : char {
         Buy = 'B',
         Sell = 'S',
     };
 
-    struct SystemEvent
-    {
+    struct SystemEvent {
         MessageType messageType{MessageType::SystemEvent};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -54,8 +49,7 @@ namespace normalizer::itch
         EventCode eventCode{};
     };
 
-    struct StockDirectory
-    {
+    struct StockDirectory {
         MessageType messageType{MessageType::StockDirectory};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -76,8 +70,7 @@ namespace normalizer::itch
         char inverseIndicator{' '};
     };
 
-    struct StockTradingAction
-    {
+    struct StockTradingAction {
         MessageType messageType{MessageType::StockTradingAction};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -88,8 +81,7 @@ namespace normalizer::itch
         std::array<char, 4> reason{};
     };
 
-    struct AddOrder
-    {
+    struct AddOrder {
         MessageType messageType{MessageType::AddOrder};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -101,8 +93,7 @@ namespace normalizer::itch
         std::uint32_t price{0};
     };
 
-    struct AddOrderWithMPID
-    {
+    struct AddOrderWithMPID {
         MessageType messageType{MessageType::AddOrderWithMPID};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -115,8 +106,7 @@ namespace normalizer::itch
         std::array<char, 4> attribution{};
     };
 
-    struct OrderExecuted
-    {
+    struct OrderExecuted {
         MessageType messageType{MessageType::OrderExecuted};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -126,8 +116,7 @@ namespace normalizer::itch
         std::uint64_t matchNumber{0};
     };
 
-    struct OrderExecutedWithPrice
-    {
+    struct OrderExecutedWithPrice {
         MessageType messageType{MessageType::OrderExecutedWithPrice};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -139,8 +128,7 @@ namespace normalizer::itch
         std::uint32_t executionPrice{0};
     };
 
-    struct OrderCancel
-    {
+    struct OrderCancel {
         MessageType messageType{MessageType::OrderCancel};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};
@@ -158,8 +146,7 @@ namespace normalizer::itch
         std::uint64_t orderReferenceNumber{0};
     };
 
-    struct OrderReplace
-    {
+    struct OrderReplace {
         MessageType messageType{MessageType::OrderReplace};
         std::uint16_t stockLocate{0};
         std::uint16_t trackingNumber{0};

@@ -45,7 +45,8 @@ data/raw/
 *.csv
 *.parquet
 *.gz
+*.bin
 
 
 # Folder for .txt files used for notekeeping and stuff
-planning
+planning/
