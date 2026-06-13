@@ -4,7 +4,6 @@
 
 namespace normalizer::events {
     struct TopOfBookEvent {
-        std::uint64_t sequenceNumber{0};
         std::uint64_t sourceTimestamp{0};
         std::uint64_t bidShares{0};
         std::uint64_t askShares{0};
