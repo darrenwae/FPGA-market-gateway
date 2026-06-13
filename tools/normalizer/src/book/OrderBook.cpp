@@ -129,7 +129,7 @@ namespace{
             return BookUpdateStatus::PriceLevelUnderflow;
         }
 
-        const bool oldSlotFreed = (oldLevel.orderCount == 1 && oldShares != oldLevel.aggregateShares);
+        const bool oldSlotFreed = (oldLevel.orderCount == 1 && oldShares == oldLevel.aggregateShares);
         const bool newLevelExist = (findIndex(levels, active, bestIndex, newPrice) != active);
         if (!newLevelExist && !oldSlotFreed && active == MaxPriceLevels) {
             return BookUpdateStatus::PriceLevelCapacityExceeded;
