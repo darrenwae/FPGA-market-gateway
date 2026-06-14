@@ -47,7 +47,8 @@ namespace normalizer::book {
         std::uint64_t askShares{0};
         std::uint32_t bidPrice{0};
         std::uint32_t askPrice{0};
-        bool bidValid {false}, askValid {false};
+        bool bidValid {false};
+        bool askValid {false};
         bool operator==(const TopOfBook&) const = default;
     };
 
