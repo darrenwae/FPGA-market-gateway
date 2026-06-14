@@ -43,11 +43,11 @@ namespace normalizer::book {
     };
 
     struct TopOfBook {
-        bool bidValid {false}, askValid {false};
-        std::uint32_t bidPrice{0};
-        std::uint32_t askPrice{0};
         std::uint64_t bidShares{0};
         std::uint64_t askShares{0};
+        std::uint32_t bidPrice{0};
+        std::uint32_t askPrice{0};
+        bool bidValid {false}, askValid {false};
         bool operator==(const TopOfBook&) const = default;
     };
 
