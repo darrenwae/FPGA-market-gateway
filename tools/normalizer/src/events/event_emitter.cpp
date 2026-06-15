@@ -1,4 +1,4 @@
-#include "normalizer/events/emitter.hpp"
+#include "normalizer/events/event_emitter.hpp"
 
 namespace normalizer::events {
     std::optional<TopOfBookEvent> TopOfBookEmitter::onBookUpdate(std::uint64_t sourceTimestamp, const book::BookUpdateResult& update) const {
