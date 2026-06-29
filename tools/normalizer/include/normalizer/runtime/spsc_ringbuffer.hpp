@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <utility>
+#include <type_traits>
 
 
 namespace normalizer::runtime {
@@ -77,7 +78,7 @@ namespace normalizer::runtime {
         std::array<T, Capacity> ringBuffer_ {};
         alignas(64) std::atomic<std::size_t> writeIndex_ {0};
         std::size_t cachedReadIndex_{0};
-        
+
         alignas(64) std::atomic<std::size_t> readIndex_ {0};
         std::size_t cachedWriteIndex_{0};
     };
