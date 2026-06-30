@@ -1,7 +1,7 @@
 # Host Architecture v0
 This document defines the host-side software architecture for the FPGA market-gateway slice.
 
-The host software is responsible for reading historical NASDAQ ITCH data, deriving FPGA-facing event updates, generating fully populated 32-byte internal protocol objects, assigning downstream sequence numbers, batching those objects into UDP payloads, and transmitting them to the FPGA.
+The host software is responsible for reading historical NASDAQ ITCH data, deriving FPGA-facing event updates, generating 32-byte internal protocol messages, assigning downstream sequence numbers, and transmitting those 32-byte messages to the FPGA over UDP.
 
 Note: The internal wire format itself is defined separately in `docs/internal_protocol_v0.md`.
 
@@ -14,11 +14,10 @@ flowchart TB
     B[ITCH file reader]
     C[ITCH message decoder]
     D[Order book builder / TOB extractor]
-    E[Host event emitters]
-    F[Internal protocol object generator]
-    G[Outbound sequencer]
-    H[UDP batcher / sender]
-    I[FPGA]
+    E[Internal message generator]
+    F[Outbound sequencer]
+    G[UDP batcher / sender]
+    H[FPGA]
 
     A --> B
     B --> C
@@ -27,10 +26,7 @@ flowchart TB
     E --> F
     F --> G
     G --> H
-    H --> I
 ```
-
-Implementation note: In v0, there is no separate protocol-encoder stage after outbound sequencing. The internal protocol object generator writes the fixed 32-byte byte layout directly, except for the downstream `sequence_number`. The outbound sequencer writes the final sequence-number field. The result is already a transport-ready 32-byte internal protocol object.
 
 ## Responsibilities
 ### 1. ITCH File Reader
@@ -95,52 +91,37 @@ Responsibilities:
 - Determine whether each ITCH event changes top-of-book.
 - Emit a host-side top-of-book update object only when the current best bid/ask changes.
 
-### 5. Host Event Emitters
 
-The host event emitters convert decoded ITCH messages and book-update results into host-side events used by the internal protocol object generator.
+### 5. Internal Protocol Message Generator
 
-Examples:
-| Host-side input | Host event |
-|---|---|
-| ITCH `S` System Event | `SessionStatusEvent` |
-| ITCH `H` Stock Trading Action | `SymbolStatusEvent` |
-| Book update with changed top-of-book | `TopOfBookEvent` |
-
-This stage does not assign `sequence_number` and does not produce UDP payload bytes.
-
-### 6. Internal Protocol Object Generator
-
-The internal protocol object generator converts host-side events and gateway commands into 32-byte internal protocol objects.
+The internal protocol message generator converts host-side events into 32-byte internal protocol message objects.
 
 Examples:
 | Host-side input | Internal protocol message |
 |---|---|
-| `SessionStatusEvent` | `SESSION_STATUS` |
-| `SymbolStatusEvent` | `SYMBOL_STATUS` |
-| `TopOfBookEvent` | `TOB_UPDATE` |
+| ITCH `S` System Event | `SESSION_STATUS` |
+| ITCH `H` Stock Trading Action | `SYMBOL_STATUS` |
+| Top-of-book changed | `TOB_UPDATE` |
 | Test/synthetic order | `ORDER_INTENT` |
 | Host setup/reset/risk-limit command | `CONFIG_CONTROL` |
 
-This stage writes the fixed 32-byte internal protocol layout directly, using the byte offsets and endianness defined in `docs/internal_protocol_v0.md`. It creates a complete internal protocol object except for the downstream `sequence_number` field.
+This stage serializes message fields into the fixed 32-byte layout defined in `docs/internal_protocol_v0.md`, but does not assign `sequence_number`.
 
-### 7. Outbound Sequencer
+### 6. Outbound Sequencer
 The outbound sequencer assigns the global downstream `sequence_number`.
 
 Responsibilities:
 - Assign `sequence_number` immediately before a message is committed to the outbound stream.
 - Increment `sequence_number` globally across all host-to-FPGA message types.
 - Preserve exact downstream message order.
-- Produce a fully populated 32-byte internal protocol object ready for UDP batching.
 
-The sequence number should not be assigned when a raw ITCH event is first parsed. Some ITCH events produce no FPGA-facing message, and batching decisions are made later.
 
-### 8. UDP Batcher / Sender
-
-The UDP batcher collects fully populated 32-byte internal protocol objects into UDP payloads.
+### 7. UDP Batcher / Sender
+The UDP batcher collects encoded 32-byte messages into UDP payloads.
 
 Responsibilities:
 
-- Build UDP payloads containing `N` consecutive 32-byte internal protocol objects.
+- Build UDP payloads containing `N` consecutive 32-byte messages.
 - Ensure `1 <= N <= 46` for standard Ethernet MTU 1500 with IPv4/UDP.
 - Ensure UDP payload length is always a positive multiple of 32.
 - Preserve downstream message order.
