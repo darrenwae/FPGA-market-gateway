@@ -15,13 +15,15 @@ namespace gateway {
     std::vector<commands::ConfigCommand> CommandSource::startupConfig (std::uint64_t timestamp) {
         std::vector<commands::ConfigCommand> startupConfigCommands {};
         startupConfigCommands.reserve(1 + 4*config_.enabledSymbols.size());
+        const auto maxNotionalHigh = static_cast<std::uint32_t>(config_.maxNotional >> 32);
+        const auto maxNotionalLow = static_cast<std::uint32_t>(config_.maxNotional & 0xFFFFFFFF);
 
         startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, 0, commands::ConfigOpcode::ResetAll, 0, 0));
 
         for (const auto symbolId:config_.enabledSymbols) {
             startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, symbolId, commands::ConfigOpcode::SetSymbolEnabled, 1, 0));
             startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, symbolId, commands::ConfigOpcode::SetMaxOrderQty, config_.maxOrderQty, 0));
-            startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, symbolId, commands::ConfigOpcode::SetMaxNotional, config_.maxNotional, 0));
+            startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, symbolId, commands::ConfigOpcode::SetMaxNotional, maxNotionalHigh, maxNotionalLow));
             startupConfigCommands.emplace_back(emitter_.makeConfigCommand(timestamp, symbolId, commands::ConfigOpcode::SetPriceBandTicks, config_.priceBandTicks, 0));
         }
 

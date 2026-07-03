@@ -15,7 +15,7 @@ namespace gateway {
     struct GatewayConfig {
         std::vector<std::uint16_t> enabledSymbols {};
         std::uint32_t maxOrderQty {1000};
-        std::uint32_t maxNotional {1'000'000'000};
+        std::uint64_t maxNotional {1'000'000'000};
         std::uint32_t priceBandTicks {10};
     };
 
