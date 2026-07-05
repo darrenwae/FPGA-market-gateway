@@ -884,8 +884,8 @@ set_property IOSTANDARD  [get_ports {}]
 set_property PACKAGE_PIN C14 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J13-3 
-set_property PACKAGE_PIN C13 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN C13 [get_ports {SFP1_TDIS}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP1_TDIS}]
 # J13-4 
 set_property PACKAGE_PIN B12 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
@@ -896,14 +896,14 @@ set_property IOSTANDARD  [get_ports {}]
 set_property PACKAGE_PIN D14 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J13-7 
-set_property PACKAGE_PIN D13 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN D13 [get_ports {SFP1_RATE_SELECT0}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP1_RATE_SELECT0}]
 # J13-8 
 set_property PACKAGE_PIN E13 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J13-9 
-set_property PACKAGE_PIN E12 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN E12 [get_ports {SFP1_RATE_SELECT1}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP1_RATE_SELECT1}]
 # J13-12 
 set_property PACKAGE_PIN M1 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
@@ -920,8 +920,8 @@ set_property IOSTANDARD  [get_ports {}]
 set_property PACKAGE_PIN F14 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J14-3 
-set_property PACKAGE_PIN F13 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN F13 [get_ports {SFP2_TDIS}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP2_TDIS}]
 # J14-4 
 set_property PACKAGE_PIN F12 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
@@ -932,14 +932,14 @@ set_property IOSTANDARD  [get_ports {}]
 set_property PACKAGE_PIN A14 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J14-7 
-set_property PACKAGE_PIN B14 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN B14 [get_ports {SFP2_RATE_SELECT0}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP2_RATE_SELECT0}]
 # J14-8 
 set_property PACKAGE_PIN A13 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
 # J14-9 
-set_property PACKAGE_PIN A12 [get_ports {}]
-set_property IOSTANDARD  [get_ports {}]
+set_property PACKAGE_PIN A12 [get_ports {SFP2_RATE_SELECT1}]
+set_property IOSTANDARD LVCMOS33 [get_ports {SFP2_RATE_SELECT1}]
 # J14-12 
 set_property PACKAGE_PIN K1 [get_ports {}]
 set_property IOSTANDARD  [get_ports {}]
