@@ -32,6 +32,8 @@ build/
 *.Xil/
 *.bit
 *.ltx
+*.xpr
+*.srcs/
 
 # Waveforms / simulation outputs
 *.vcd
