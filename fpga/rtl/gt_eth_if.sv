@@ -1,4 +1,4 @@
-interface gt_etf_if;
+interface gt_eth_if;
     logic gtwiz_userclk_tx_reset_in;
     logic gtwiz_userclk_rx_reset_in;
     logic [63:0] gtwiz_userdata_tx_in;
