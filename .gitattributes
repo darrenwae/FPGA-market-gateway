@@ -1,11 +1,18 @@
-*.sv   text eol=lf
-*.svh  text eol=lf
-*.v    text eol=lf
-*.vh   text eol=lf
-*.xdc  text eol=lf
-*.tcl  text eol=lf
-*.xci  text eol=lf
-*.py   text eol=lf
-*.mk   text eol=lf
-*.sh   text eol=lf
-*.md   text eol=lf
+# Keep Vivado project, IP, and hardware files as-is
+*.xpr      binary
+*.bd       text eol=crlf
+*.xci      binary
+*.xcix     binary
+
+# Keep HDL source files with consistent Windows line endings
+*.v        text eol=crlf
+*.vh       text eol=crlf
+*.vhd      text eol=crlf
+*.vhdl     text eol=crlf
+*.sv       text eol=crlf
+*.svh      text eol=crlf
+
+# Keep constraints and simulation files with Windows line endings
+*.xdc      text eol=crlf
+*.tcl      text eol=crlf
+*.wcfg     text eol=crlf
