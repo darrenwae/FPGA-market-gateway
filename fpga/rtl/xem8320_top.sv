@@ -5,85 +5,137 @@ module xem8320_top (
     input logic gt_refclk_p, // 156.25 Mhz MGT ref clk
     input logic gt_refclk_n,
 
-    input logic [1:0] sfp_rx_p,
-    input logic [1:0] sfp_rx_n,
+    input  logic [1:0] sfp_rx_p,
+    input  logic [1:0] sfp_rx_n,
     output logic [1:0] sfp_tx_p,
     output logic [1:0] sfp_tx_n,
 
     output logic [1:0] sfp_tx_disable,
     output logic [1:0] sfp_rate_select_0,
     output logic [1:0] sfp_rate_select_1
-    
+
 );
 
-    logic clk_freerun;
-    logic [1:0][63:0] tx_data;
-    logic [1:0][5:0] tx_header;
-    logic [1:0][6:0] tx_sequence;
+  // Clock and GT status signals
+  logic clk_freerun;
+  logic tx_pcs_clk;
+  logic rx_pcs_clk;
 
-    logic [1:0] rx_gearbox_slip;
+  logic tx_reset_done;
+  logic rx_reset_done;
+  logic rx_cdr_stable;
+  logic [1:0] gt_power_good;
 
-    logic [1:0][63:0] rx_data;
-    logic [1:0][5:0] rx_header;
-    logic [1:0][1:0] rx_data_valid;
-    logic [1:0][1:0] rx_header_valid;
-    logic [1:0][1:0] rx_start_of_seq;
 
-    logic tx_pcs_clk;
-    logic rx_pcs_clk;
-    logic tx_reset_done;
-    logic rx_reset_done;
-    logic rx_cdr_stable;
-    logic [1:0] gt_power_good;
+  // TX PCS-to-GT gearbox interface
+  logic [1:0][63:0] tx_data;
+  logic [1:0][5:0] tx_header;
+  logic [1:0][6:0] tx_sequence;
 
-    // temporarily defined
-    assign tx_data = '0;
-    assign tx_header = '0;
-    assign tx_sequence = '0;
-    assign rx_gearbox_slip = '0; // awaiting block_lock controller
+  //RX GT-to-PCS gearbox interface
+  logic [1:0][63:0] rx_data;
+  logic [1:0][5:0] rx_header;
+  logic [1:0][1:0] rx_data_valid;
+  logic [1:0][1:0] rx_header_valid;
+  logic [1:0][1:0] rx_start_of_seq;
+  logic [1:0] rx_gearbox_slip;
 
-    assign sfp_tx_disable = 2'b11; // change to 2'b00 when Tx PCS is implemented
-    assign sfp_rate_select_0 = 2'b11;
-    assign sfp_rate_select_1 = 2'b11;
 
-    IBUFDS u_sys_clk_buf (
-        .I(sys_clk_p),
-        .IB(sys_clk_n),
-        .O(clk_freerun)
+  // RX PCS reset synchronization
+  logic rx_pcs_rst;
+  (*ASYNC_REG = "TRUE"*)
+  logic [1:0] rx_pcs_reset_sync;
+
+
+  // RX PCS output blocks
+  logic [1:0] rx_block_lock;
+  logic [1:0][63:0] rx_descrambled_payload;
+  logic [1:0][1:0] rx_descrambled_header;
+  logic [1:0] rx_descrambled_valid;
+
+
+  // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
+  assign tx_data = '0;
+  assign tx_header = '0;
+  assign tx_sequence = '0;
+
+  assign sfp_tx_disable = 2'b11;  // change to 2'b00 when Tx PCS is implemented
+  assign sfp_rate_select_0 = 2'b11;
+  assign sfp_rate_select_1 = 2'b11;
+
+
+  // buffer for 100 Mhz free running clock
+  IBUFDS u_sys_clk_buf (
+      .I (sys_clk_p),
+      .IB(sys_clk_n),
+      .O (clk_freerun)
+  );
+
+  // GTY transceiver
+  gty_10gbase_r_wrapper u_gty_10gbase_r (
+      .clk_freerun(clk_freerun),
+      .rst(1'b0),
+
+      .gt_refclk_p(gt_refclk_p),
+      .gt_refclk_n(gt_refclk_n),
+
+      .sfp_rx_p(sfp_rx_p),
+      .sfp_rx_n(sfp_rx_n),
+      .sfp_tx_p(sfp_tx_p),
+      .sfp_tx_n(sfp_tx_n),
+
+      .tx_data(tx_data),
+      .tx_header(tx_header),
+      .tx_sequence(tx_sequence),
+
+      .rx_gearbox_slip(rx_gearbox_slip),
+
+      .rx_data(rx_data),
+      .rx_header(rx_header),
+      .rx_data_valid(rx_data_valid),
+      .rx_header_valid(rx_header_valid),
+      .rx_start_of_seq(rx_start_of_seq),
+
+      .tx_pcs_clk(tx_pcs_clk),
+      .rx_pcs_clk(rx_pcs_clk),
+
+      .tx_reset_done(tx_reset_done),
+      .rx_reset_done(rx_reset_done),
+      .rx_cdr_stable(rx_cdr_stable),
+      .gt_power_good(gt_power_good)
+  );
+
+  // rx_reset_done is asynchronous w.r.t rx_pcs_clk
+  // Assert PCS reset when the GT RX path is not ready
+  // Deassert reset synchronously in the RX PCS clock domain
+  always_ff @(posedge rx_pcs_clk or negedge rx_reset_done) begin
+    if (!rx_reset_done) begin
+      rx_pcs_reset_sync <= 2'b11;
+    end else begin
+      rx_pcs_reset_sync <= {rx_pcs_reset_sync[0], 1'b0};
+    end
+  end
+
+  assign rx_pcs_rst = rx_pcs_reset_sync[1];
+
+  // pcs_rx pipeline for both rx channels
+  for (genvar channel = 0; channel < 2; channel++) begin : gen_rx_pcs
+
+  (*DONT_TOUCH = "yes"*)
+    pcs_rx_channel u_pcs_rx_channel (
+        .clk(rx_pcs_clk),
+        .rst(rx_pcs_rst),
+        .rx_data(rx_data[channel]),
+        .rx_header(rx_header[channel]),
+        .rx_data_valid(rx_data_valid[channel]),
+        .rx_header_valid(rx_header_valid[channel]),
+        .rx_start_of_seq(rx_start_of_seq[channel]),
+        .rx_gearbox_slip(rx_gearbox_slip[channel]),
+        .block_lock(rx_block_lock[channel]),
+        .descrambled_payload(rx_descrambled_payload[channel]),
+        .descrambled_header(rx_descrambled_header[channel]),
+        .descrambled_valid(rx_descrambled_valid[channel])
     );
-
-
-    gty_10gbase_r_wrapper u_gty_10gbase_r (
-        .clk_freerun(clk_freerun),
-        .rst(1'b0),
-
-        .gt_refclk_p(gt_refclk_p),
-        .gt_refclk_n(gt_refclk_n),
-
-        .sfp_rx_p(sfp_rx_p),
-        .sfp_rx_n(sfp_rx_n),
-        .sfp_tx_p(sfp_tx_p),
-        .sfp_tx_n(sfp_tx_n),
-
-        .tx_data(tx_data),
-        .tx_header(tx_header),
-        .tx_sequence(tx_sequence),
-
-        .rx_gearbox_slip(rx_gearbox_slip),
-
-        .rx_data(rx_data),
-        .rx_header(rx_header),
-        .rx_data_valid(rx_data_valid),
-        .rx_header_valid(rx_header_valid),
-        .rx_start_of_seq(rx_start_of_seq),
-
-        .tx_pcs_clk(tx_pcs_clk),
-        .rx_pcs_clk(rx_pcs_clk),
-
-        .tx_reset_done(tx_reset_done),
-        .rx_reset_done(rx_reset_done),
-        .rx_cdr_stable(rx_cdr_stable),
-        .gt_power_good(gt_power_good)
-    );
+  end
 
 endmodule
