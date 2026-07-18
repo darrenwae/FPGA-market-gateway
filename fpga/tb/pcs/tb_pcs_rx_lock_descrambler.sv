@@ -1,6 +1,6 @@
 `timescale 1ns / 1ps
 
-module tb_pcs_rx_chain;
+module tb_pcs_rx_lock_descrambler;
 
   localparam realtime CLK_PERIOD_NS = 6.20606;
 

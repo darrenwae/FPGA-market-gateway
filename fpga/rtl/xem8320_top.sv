@@ -1,8 +1,8 @@
 module xem8320_top (
-    input logic sys_clk_p, // free running 100Mhz clk used by GT reset controller
+    input logic sys_clk_p,  // free running 100Mhz clk used by GT reset controller
     input logic sys_clk_n,
 
-    input logic gt_refclk_p, // 156.25 Mhz MGT ref clk
+    input logic gt_refclk_p,  // 156.25 Mhz MGT ref clk
     input logic gt_refclk_n,
 
     input  logic [1:0] sfp_rx_p,
@@ -49,9 +49,15 @@ module xem8320_top (
 
   // RX PCS output blocks
   logic [1:0] rx_block_lock;
-  logic [1:0][63:0] rx_descrambled_payload;
-  logic [1:0][1:0] rx_descrambled_header;
-  logic [1:0] rx_descrambled_valid;
+
+  logic [1:0][63:0] rx_frame_data;
+  logic [1:0][7:0] rx_frame_keep;
+  logic [1:0] rx_frame_start;
+  logic [1:0] rx_frame_end;
+  logic [1:0] rx_frame_valid;
+
+  logic [1:0] rx_bad_block;
+  logic [1:0] rx_sequence_error;
 
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
@@ -111,7 +117,8 @@ module xem8320_top (
   always_ff @(posedge rx_pcs_clk or negedge rx_reset_done) begin
     if (!rx_reset_done) begin
       rx_pcs_reset_sync <= 2'b11;
-    end else begin
+    end
+    else begin
       rx_pcs_reset_sync <= {rx_pcs_reset_sync[0], 1'b0};
     end
   end
@@ -121,7 +128,7 @@ module xem8320_top (
   // pcs_rx pipeline for both rx channels
   for (genvar channel = 0; channel < 2; channel++) begin : gen_rx_pcs
 
-  (*DONT_TOUCH = "yes"*)
+    (*DONT_TOUCH = "yes"*)
     pcs_rx_channel u_pcs_rx_channel (
         .clk(rx_pcs_clk),
         .rst(rx_pcs_rst),
@@ -132,9 +139,13 @@ module xem8320_top (
         .rx_start_of_seq(rx_start_of_seq[channel]),
         .rx_gearbox_slip(rx_gearbox_slip[channel]),
         .block_lock(rx_block_lock[channel]),
-        .descrambled_payload(rx_descrambled_payload[channel]),
-        .descrambled_header(rx_descrambled_header[channel]),
-        .descrambled_valid(rx_descrambled_valid[channel])
+        .frame_data(rx_frame_data[channel]),
+        .frame_keep(rx_frame_keep[channel]),
+        .frame_start(rx_frame_start[channel]),
+        .frame_end(rx_frame_end[channel]),
+        .frame_valid(rx_frame_valid[channel]),
+        .bad_block(rx_bad_block[channel]),
+        .sequence_error(rx_sequence_error[channel])
     );
   end
 

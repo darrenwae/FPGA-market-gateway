@@ -1,6 +1,3 @@
-// Per-channel 10GBASE-R receive PCS front end.
-// Acquires 64b/66b block alignment and descrambles aligned payload blocks.
-
 module pcs_rx_channel (
     input logic clk,
     input logic rst,
@@ -14,14 +11,23 @@ module pcs_rx_channel (
     output logic rx_gearbox_slip,
     output logic block_lock,
 
-    output logic [63:0] descrambled_payload,
-    output logic [1:0] descrambled_header,
-    output logic descrambled_valid
+    output logic [63:0] frame_data,
+    output logic [7:0] frame_keep,
+    output logic frame_start,
+    output logic frame_end,
+    output logic frame_valid,
+
+    output logic bad_block,
+    output logic sequence_error
 );
 
   logic [63:0] block_payload;
   logic [1:0] block_header;
   logic block_valid;
+
+  logic [63:0] descrambled_payload;
+  logic [1:0] descrambled_header;
+  logic descrambled_valid;
 
   pcs_rx_block_lock u_block_lock (
       .clk(clk),
@@ -48,6 +54,21 @@ module pcs_rx_channel (
       .descrambled_payload(descrambled_payload),
       .header_out(descrambled_header),
       .descrambled_payload_valid(descrambled_valid)
+  );
+
+  pcs_rx_block_decoder u_block_decoder (
+      .clk(clk),
+      .rst(rst),
+      .descrambled_payload(descrambled_payload),
+      .descrambled_header(descrambled_header),
+      .descrambled_valid(descrambled_valid),
+      .frame_data(frame_data),
+      .frame_keep(frame_keep),
+      .frame_start(frame_start),
+      .frame_end(frame_end),
+      .frame_valid(frame_valid),
+      .bad_block(bad_block),
+      .sequence_error(sequence_error)
   );
 
 endmodule
