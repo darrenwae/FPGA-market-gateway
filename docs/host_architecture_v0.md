@@ -1,7 +1,7 @@
 # Host Architecture v0
 This document defines the host-side software architecture for the FPGA market-gateway slice.
 
-The host software is responsible for reading historical NASDAQ ITCH data, deriving FPGA-facing event updates, generating 32-byte internal protocol messages, assigning downstream sequence numbers, and transmitting those 32-byte messages to the FPGA over UDP.
+The host software is responsible for reading historical NASDAQ ITCH data, deriving FPGA-facing event updates, generating 32-byte internal protocol messages, assigning downstream sequence numbers, and transmitting those 32-byte messages to the FPGA over UDPreceiving `ORDER_DECISION` responses, and collecting NIC hardware timestamps for external latency measurement.
 
 Note: The internal wire format itself is defined separately in `docs/internal_protocol_v0.md`.
 
@@ -94,7 +94,7 @@ Responsibilities:
 
 ### 5. Internal Protocol Message Generator
 
-The internal protocol message generator converts host-side events into 32-byte internal protocol message objects.
+The internal protocol message generator converts host-side events into internal protocol message objects.
 
 Examples:
 | Host-side input | Internal protocol message |
@@ -105,7 +105,7 @@ Examples:
 | Test/synthetic order | `ORDER_INTENT` |
 | Host setup/reset/risk-limit command | `CONFIG_CONTROL` |
 
-This stage serializes message fields into the fixed 32-byte layout defined in `docs/internal_protocol_v0.md`, but does not assign `sequence_number`.
+This stage populates the message-specific fields defined in `docs/internal_protocol_v0.md`, but does not assign `sequence_number`.
 
 ### 6. Outbound Sequencer
 The outbound sequencer assigns the global downstream `sequence_number`.
@@ -117,10 +117,10 @@ Responsibilities:
 
 
 ### 7. UDP Batcher / Sender
-The UDP batcher collects encoded 32-byte messages into UDP payloads.
+The UDP batcher serializes sequenced internal messages into their fixed 32-byte wire format and collects them into UDP payloads.
 
 Responsibilities:
-
+- Serialize each sequenced message using the fixed layout defined in `docs/internal_protocol_v0.md`.
 - Build UDP payloads containing `N` consecutive 32-byte messages.
 - Ensure `1 <= N <= 46` for standard Ethernet MTU 1500 with IPv4/UDP.
 - Ensure UDP payload length is always a positive multiple of 32.
@@ -154,7 +154,7 @@ The following message types shall trigger immediate flush after being appended t
 |---|---|
 | `SESSION_STATUS` | Session state affects whether later order intents are valid. |
 | `SYMBOL_STATUS` | Symbol trading status affects risk gating. |
-| `ORDER_INTENT` | Order-intent latency is part of the core measurement path. |
+| `ORDER_INTENT` | Must be transmitted immediately and remain the final message in its UDP payload. |
 | `CONFIG_CONTROL` | Configuration and reset commands should take effect deterministically. |
 
 ### Ordering Rule
@@ -181,12 +181,26 @@ The host shall not transmit `seq=102` before `seq=100` and `seq=101`.
 
 ## Upstream Decision Receiver
 
-The host should also provide an upstream receiver for FPGA `ORDER_DECISION` messages.
+The host provides an upstream receiver for FPGA `ORDER_DECISION` messages. 
+Each upstream UDP payload contains exactly one 32-byte `ORDER_DECISION`.
 
 Responsibilities:
 - Receive UDP packets from the FPGA.
-- Decode one or more 32-byte upstream records.
+- Require the UDP payload length to be exactly 32 bytes.
+- Decode the `ORDER_DECISION`.
 - Validate `message_type = 0x81`.
-- Correlate decisions using `sequence_number` and `intent_id`.
-- Log `decision`, `reject_reason`, and `latency_cycles`.
+- Validate that all reserved fields are 0.
+- Correlate the decision with its `ORDER_INTENT` using `sequence_number` and `intent_id`.
+- Log `decision` and `reject_reason`.
+- Capture the NIC hardware RX timestamp.
 - Detect missing, duplicate, or unexpected decisions during tests.
+
+
+## External Latency Measurement
+
+For each downstream UDP packet containing an `ORDER_INTENT`, the host records the NIC hardware TX timestamp. For each corresponding `ORDER_DECISION`, the host records the NIC hardware RX timestamp.
+
+The target metric is:
+
+```text
+first response bit reaches the host NIC - last request bit leaves the host NIC

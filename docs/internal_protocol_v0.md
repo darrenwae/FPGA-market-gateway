@@ -4,7 +4,7 @@ In v0, the host PC runs a replay and normalization program. It reads historical 
 
 The host sends normalized fixed-format messages to the FPGA over Ethernet using IPv4/UDP. Each UDP payload contains one or more 32-byte internal protocol messages.
 
-The FPGA parses Ethernet/IP/UDP enough to extract the UDP payload, decodes the internal protocol messages, maintains the latest top-of-book state, performs pre-trade risk checks on order intents, and returns accept/reject decisions with cycle-level latency measurements.
+The FPGA parses Ethernet/IP/UDP enough to extract the UDP payload, decodes the internal protocol messages, maintains the latest top-of-book state, performs pre-trade risk checks on order intents, and returns accept/reject decisions.
 
 ## Design Summary
 - Message size: 32 bytes fixed length.
@@ -30,7 +30,7 @@ All protocol messages use the same 32-byte container.
 | 2-3 | `reserved` | 2 bytes | Reserved for alignment and future use. Set to 0 in v0. |
 | 4-7 | `sequence_number` | 4 bytes | Stream sequence number. Meaning depends on direction. |
 | 8-9 | `symbol_id` | 2 bytes | Instrument identifier. In v0, this follows NASDAQ `stock_locate` where applicable. |
-| 10-15 | `timestamp` | 6 bytes | Timestamp or FPGA cycle-counter value, depending on message type and direction. |
+| 10-15 | `timestamp` | 6 bytes | Message timestamp for downstream messages. Reserved and set to 0 for upstream `ORDER_DECISION`. |
 | 16-19 | `payload_0` | 4 bytes | Message-specific payload word. |
 | 20-23 | `payload_1` | 4 bytes | Message-specific payload word. |
 | 24-27 | `payload_2` | 4 bytes | Message-specific payload word. |
@@ -69,7 +69,7 @@ UDP payload:
 Rules:
 - Since each internal message is exactly 32 bytes, the UDP payload length shall be a positive multiple of 32.
 - For standard Ethernet MTU 1500 using IPv4 and UDP, maximum UDP payload is `1500 - 20(IP header) - 8(UDP header) = 1472` bytes.
-- Therefore, the maximum number of internal messages per UDP payload is ` 1472 / 32 = 46`.
+- Therefore, the maximum number of internal messages per UDP payload is `1472 / 32 = 46`.
 - Messages are parsed in payload order.
 - There is no additional internal packet header in v0.
 
@@ -366,16 +366,15 @@ reject if order_price < bid_price - max_price_band_ticks
 |---|---|
 | `0x00000000` | Clear all counters. |
 | bit 0 | Clear decision counters. |
-| bit 1 | Clear latency counters. |
-| bit 2 | Clear parser/error counters. |
-| bits 3-31 | Reserved. |
+| bit 1 | Clear parser/error counters. |
+| bits 2-31 | Reserved. |
 
-Effect: clears selected FPGA debug/measurement counters. Does not modify top-of-book state, symbol status, symbol enable state, or risk limits.
+Effect: clears selected FPGA debug counters. Does not modify top-of-book state, symbol status, symbol enable state, or risk limits.
 
 ## Upstream Message: ORDER_DECISION
 ```text
 ORDER_DECISION message format:
-[[message_type][flags][reserved][sequence_number][symbol_id][timestamp][decision][reject_reason][latency_cycles][intent_id]]
+[[message_type][flags][reserved][sequence_number][symbol_id][reserved_0][decision][reject_reason][reserved_1][intent_id]]
 ```
 
 Total size: 32 bytes.
@@ -387,14 +386,13 @@ Total size: 32 bytes.
 | `reserved` | Shall be 0. |
 | `sequence_number` | Echoes the `sequence_number` of the `ORDER_INTENT` message being answered. |
 | `symbol_id` | Echoes the `symbol_id` from the `ORDER_INTENT` message. |
-| `timestamp` | FPGA local cycle-counter value captured when `ORDER_DECISION` is emitted. This is not a NASDAQ timestamp. |
+| `reserved_0` | Shall be 0. |
 | `decision` | FPGA decision enum. |
 | `reject_reason` | Rejection reason enum. |
-| `latency_cycles` | Number of FPGA clock cycles from `ORDER_INTENT` acceptance into the risk-check pipeline to `ORDER_DECISION` valid at the risk-check pipeline output. |
+| `reserved_1` | Shall be 0. |
 | `intent_id` | Echoes the `intent_id` from the `ORDER_INTENT` message. |
 
 `decision` encodings:
-
 | Value | Meaning |
 |:-:|---|
 | `0x00000000` | `UNKNOWN_INVALID` |
@@ -449,15 +447,30 @@ All reject predicates should be computed in a fixed-latency datapath. The priori
 ### General parser errors
 
 - If UDP payload length is 0, ignore the packet.
-- If UDP payload length is not divisible by 32, drop the entire packet and increment `parser_error_counter`.
-- If `message_type` is unknown or reserved, ignore that message and increment `parser_error_counter`.
-- If reserved bytes/bits are nonzero, ignore that message and increment `parser_error_counter` unless the specific message type defines otherwise.
+- If UDP payload length is not divisible by 32, treat the packet as a protocol error.
+- If `message_type` is unknown or reserved, treat the message as a protocol error.
+- If reserved bytes or bits are nonzero, treat the message as a protocol error unless the specific message type defines otherwise.
+- If a UDP payload contains more than one `ORDER_INTENT`, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
+- If any message follows an `ORDER_INTENT` in the same UDP payload, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
+- Protocol errors increment `parser_error_counter`.
+
+### Late frame-integrity failure
+
+The FPGA may process messages and begin transmitting an `ORDER_DECISION` before the source Ethernet frame's FCS has been validated.
+
+If the source frame later fails integrity validation:
+
+- any speculative `ORDER_DECISION` associated with that frame shall be transmitted with an intentionally incorrect Ethernet FCS;
+- the response shall therefore not be externally valid;
+- the FPGA shall enter `STREAM_FAULT`;
+- all trading state shall be treated as untrusted; and
+- recovery shall require `RESET_ALL` followed by host replay of configuration and market state.
 
 ### Sequence errors
 
 - Downstream `sequence_number` increments globally across all PC-to-FPGA message types.
 - If `sequence_number` is not the expected next value, raise `sequence_error` and enter `STREAM_FAULT` state.
-- In `STREAM_FAULT` state, the FPGA shall reject all subsequently decoded `ORDER_INTENT` messages.
+- In `STREAM_FAULT` state, the FPGA shall reject all subsequently decoded `ORDER_INTENT` messages with `STREAM_FAULT`.
 - `STREAM_FAULT` is cleared only by `RESET_ALL`.
 
 ### ORDER_INTENT rejection rules
@@ -498,17 +511,3 @@ After reset:
 
 This default state is fail-closed: order intents are rejected until the host explicitly configures the symbol and the required risk limits.
 
-## Latency Measurement
-
-The project measures internal FPGA datapath latency in cycles.
-
-```text
-latency_cycles = decision_output_cycle - order_intent_input_accept_cycle
-```
-
-Measurement boundary:
-
-- Start: cycle when a decoded `ORDER_INTENT` is accepted into the risk-check pipeline.
-- End: cycle when the corresponding `ORDER_DECISION` is valid at the output of the risk-check pipeline.
-
-This excludes external PC-to-FPGA-to-PC wall-clock latency and excludes Ethernet serialization delay unless explicitly measured elsewhere.
