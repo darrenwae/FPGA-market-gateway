@@ -16,7 +16,7 @@ module pcs_rx_channel (
     output logic frame_start,
     output logic frame_end,
     output logic frame_valid,
-
+    output logic frame_abort,
     output logic bad_block,
     output logic sequence_error
 );
@@ -67,6 +67,7 @@ module pcs_rx_channel (
       .frame_start(frame_start),
       .frame_end(frame_end),
       .frame_valid(frame_valid),
+      .frame_abort(frame_abort),
       .bad_block(bad_block),
       .sequence_error(sequence_error)
   );

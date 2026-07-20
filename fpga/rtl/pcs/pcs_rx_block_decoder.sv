@@ -14,6 +14,7 @@ module pcs_rx_block_decoder (
     output logic frame_start,
     output logic frame_end,
     output logic frame_valid,
+    output logic frame_abort,
 
     output logic bad_block,
     output logic sequence_error
@@ -119,6 +120,7 @@ module pcs_rx_block_decoder (
     frame_start = 1'b0;
     frame_end = 1'b0;
     frame_valid = 1'b0;
+    frame_abort = 1'b0;
     bad_block = 1'b0;
     sequence_error = 1'b0;
 
@@ -181,14 +183,7 @@ module pcs_rx_block_decoder (
                 inside_frame_next = 1'b1;
               end
             end
-            BLOCK_TYPE_TERM_0,
-						BLOCK_TYPE_TERM_1,
-						BLOCK_TYPE_TERM_2,
-						BLOCK_TYPE_TERM_3,
-						BLOCK_TYPE_TERM_4,
-						BLOCK_TYPE_TERM_5,
-						BLOCK_TYPE_TERM_6,
-						BLOCK_TYPE_TERM_7: begin
+            BLOCK_TYPE_TERM_0, BLOCK_TYPE_TERM_1, BLOCK_TYPE_TERM_2, BLOCK_TYPE_TERM_3, BLOCK_TYPE_TERM_4, BLOCK_TYPE_TERM_5, BLOCK_TYPE_TERM_6, BLOCK_TYPE_TERM_7: begin
               if (!term_format_valid) begin
                 bad_block = 1'b1;
                 inside_frame_next = 1'b0;
@@ -218,6 +213,18 @@ module pcs_rx_block_decoder (
           end
         end
       endcase
+    end
+
+    // Any decoder error during an active frame invalidates that frame
+    // Suppress the offending block and return to the idle frame state
+    if ((bad_block || sequence_error) && inside_frame) begin
+      inside_frame_next = 1'b0;
+      frame_data = '0;
+      frame_keep = '0;
+      frame_start = 1'b0;
+      frame_end = 1'b0;
+      frame_valid = 1'b0;
+      frame_abort = 1'b1;
     end
   end
 

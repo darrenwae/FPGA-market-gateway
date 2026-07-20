@@ -27,19 +27,22 @@ module pcs_rx_descrambler (
       descrambled_payload <= '0;
       header_out <= '0;
       descrambled_payload_valid <= 1'b0;
-    end else begin
+    end
+    else begin
       descrambled_payload_valid <= 1'b0;
       if (!block_lock) begin
         // alignment lost, have to re-sync
         rx_lfsr <= '0;
         sync_pending <= 1'b1;
-      end else if (block_valid) begin
+      end
+      else if (block_valid) begin
         // last 58 bits used as lfsr for descrambling next block
         rx_lfsr <= block_payload[57:0];
         if (sync_pending) begin
           // first aligned block used for synchronising lfsr with transmitter's lfsr
           sync_pending <= 1'b0;
-        end else begin
+        end
+        else begin
           descrambled_payload <= descrambled_payload_next;
           header_out <= block_header;
           descrambled_payload_valid <= 1'b1;

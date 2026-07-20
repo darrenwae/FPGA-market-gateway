@@ -10,11 +10,8 @@ module tb_pcs_rx_channel;
   // Normalized decoder representation:
   // bits [7:0] contain the earliest byte or block type.
   localparam logic [63:0] IDLE_BLOCK = 64'h0000_0000_0000_001E;
-
   localparam logic [63:0] START_0_BLOCK = 64'hA6A5_A4A3_A2A1_A0_78;
-
   localparam logic [63:0] DATA_BLOCK = 64'hB7B6_B5B4_B3B2_B1B0;
-
   localparam logic [63:0] TERM_3_BLOCK = 64'h0000_0000_D2D1_D0B4;
 
   logic clk;
@@ -34,7 +31,7 @@ module tb_pcs_rx_channel;
   logic frame_start;
   logic frame_end;
   logic frame_valid;
-
+  logic frame_abort;
   logic bad_block;
   logic sequence_error;
 
@@ -43,23 +40,20 @@ module tb_pcs_rx_channel;
   pcs_rx_channel dut (
       .clk(clk),
       .rst(rst),
-
-      .rx_data        (rx_data),
-      .rx_header      (rx_header),
-      .rx_data_valid  (rx_data_valid),
+      .rx_data(rx_data),
+      .rx_header(rx_header),
+      .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
       .rx_start_of_seq(rx_start_of_seq),
-
       .rx_gearbox_slip(rx_gearbox_slip),
-      .block_lock     (block_lock),
-
-      .frame_data (frame_data),
-      .frame_keep (frame_keep),
+      .block_lock(block_lock),
+      .frame_data(frame_data),
+      .frame_keep(frame_keep),
       .frame_start(frame_start),
-      .frame_end  (frame_end),
+      .frame_end(frame_end),
       .frame_valid(frame_valid),
-
-      .bad_block     (bad_block),
+      .frame_abort(frame_abort),
+      .bad_block(bad_block),
       .sequence_error(sequence_error)
   );
 
@@ -189,6 +183,9 @@ module tb_pcs_rx_channel;
         $fatal(1, "Descrambler warm-up produced a decoder error");
       end
 
+      if (frame_abort !== 1'b0) begin
+        $fatal(1, "Valid START_0 incorrectly asserted frame_abort");
+      end
       // START_0 followed by seven frame bytes.
       drive_normalized_block(START_0_BLOCK, SYNC_CTRL);
 
@@ -223,6 +220,10 @@ module tb_pcs_rx_channel;
         $fatal(1, "Data block produced an error");
       end
 
+      if (frame_abort !== 1'b0) begin
+        $fatal(1, "Valid data block incorrectly asserted frame_abort");
+      end
+
       // Three final bytes followed by TERMINATE.
       drive_normalized_block(TERM_3_BLOCK, SYNC_CTRL);
 
@@ -242,7 +243,44 @@ module tb_pcs_rx_channel;
         $fatal(1, "TERM_3 produced an error");
       end
 
+      if (frame_abort !== 1'b0) begin
+        $fatal(1, "Valid data block incorrectly asserted frame_abort");
+      end
+
       $display("PASS: complete frame through PCS RX channel");
+    end
+  endtask
+
+  task automatic test_abort_propagation;
+    begin
+      $display("TEST: decoder abort propagation through PCS RX channel");
+
+      acquire_lock();
+
+      tx_lfsr = {58{1'b1}};
+
+      // Descrambler synchronization block.
+      drive_normalized_block(IDLE_BLOCK, SYNC_CTRL);
+
+      // Begin a frame normally.
+      drive_normalized_block(START_0_BLOCK, SYNC_CTRL);
+
+      if (frame_valid !== 1'b1 || frame_start !== 1'b1) $fatal(1, "Initial START did not begin a frame");
+      if (frame_abort !== 1'b0) $fatal(1, "Initial START incorrectly asserted frame_abort");
+
+      // A second START before TERMINATE must abort the active frame.
+      drive_normalized_block(START_0_BLOCK, SYNC_CTRL);
+
+      if (sequence_error !== 1'b1) $fatal(1, "Repeated START did not assert sequence_error");
+      if (frame_abort !== 1'b1) $fatal(1, "Repeated START did not propagate frame_abort");
+      if (frame_valid !== 1'b0) $fatal(1, "Repeated START emitted frame data during abort");
+
+      // Decoder must recover and accept the next legal frame.
+      drive_normalized_block(START_0_BLOCK, SYNC_CTRL);
+
+      if (frame_valid !== 1'b1 || frame_start !== 1'b1) $fatal(1, "Decoder did not accept a new START after abort");
+      if (frame_abort !== 1'b0) $fatal(1, "Recovery START incorrectly asserted frame_abort");
+      $display("PASS: decoder abort propagation through PCS RX channel");
     end
   endtask
 
@@ -250,7 +288,7 @@ module tb_pcs_rx_channel;
     initialize_inputs();
 
     test_complete_frame();
-
+    test_abort_propagation();
     $display("PASS: all PCS RX channel tests");
     $finish;
   end
