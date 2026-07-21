@@ -13,7 +13,6 @@ module xem8320_top (
     output logic [1:0] sfp_tx_disable,
     output logic [1:0] sfp_rate_select_0,
     output logic [1:0] sfp_rate_select_1
-
 );
 
   // Clock and GT status signals
@@ -47,17 +46,20 @@ module xem8320_top (
   logic [1:0] rx_pcs_reset_sync;
 
 
-  // RX PCS output blocks
-  logic [1:0] rx_block_lock;
+  // Channel 0 application RX path
+  logic rx0_block_lock;
+  logic [63:0] rx0_frame_data;
+  logic [7:0] rx0_frame_keep;
+  logic rx0_frame_start;
+  logic rx0_frame_end;
+  logic rx0_frame_valid;
+  logic rx0_frame_abort;
 
-  logic [1:0][63:0] rx_frame_data;
-  logic [1:0][7:0] rx_frame_keep;
-  logic [1:0] rx_frame_start;
-  logic [1:0] rx_frame_end;
-  logic [1:0] rx_frame_valid;
+  logic rx0_bad_block;
+  logic rx0_sequence_error;
 
-  logic [1:0] rx_bad_block;
-  logic [1:0] rx_sequence_error;
+  logic rx0_fcs_result_valid;
+  logic rx0_fcs_ok;
 
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
@@ -81,30 +83,23 @@ module xem8320_top (
   gty_10gbase_r_wrapper u_gty_10gbase_r (
       .clk_freerun(clk_freerun),
       .rst(1'b0),
-
       .gt_refclk_p(gt_refclk_p),
       .gt_refclk_n(gt_refclk_n),
-
       .sfp_rx_p(sfp_rx_p),
       .sfp_rx_n(sfp_rx_n),
       .sfp_tx_p(sfp_tx_p),
       .sfp_tx_n(sfp_tx_n),
-
       .tx_data(tx_data),
       .tx_header(tx_header),
       .tx_sequence(tx_sequence),
-
       .rx_gearbox_slip(rx_gearbox_slip),
-
       .rx_data(rx_data),
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
       .rx_start_of_seq(rx_start_of_seq),
-
       .tx_pcs_clk(tx_pcs_clk),
       .rx_pcs_clk(rx_pcs_clk),
-
       .tx_reset_done(tx_reset_done),
       .rx_reset_done(rx_reset_done),
       .rx_cdr_stable(rx_cdr_stable),
@@ -125,28 +120,31 @@ module xem8320_top (
 
   assign rx_pcs_rst = rx_pcs_reset_sync[1];
 
-  // pcs_rx pipeline for both rx channels
-  for (genvar channel = 0; channel < 2; channel++) begin : gen_rx_pcs
+  // Channel 0 is the host-to-FPGA application receive path.
+  (*DONT_TOUCH = "yes"*)
+  eth_rx_channel u_eth_rx_channel (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .rx_data(rx_data[0]),
+      .rx_header(rx_header[0]),
+      .rx_data_valid(rx_data_valid[0]),
+      .rx_header_valid(rx_header_valid[0]),
+      .rx_start_of_seq(rx_start_of_seq[0]),
+      .rx_gearbox_slip(rx_gearbox_slip[0]),
+      .block_lock(rx0_block_lock),
+      .frame_data(rx0_frame_data),
+      .frame_keep(rx0_frame_keep),
+      .frame_start(rx0_frame_start),
+      .frame_end(rx0_frame_end),
+      .frame_valid(rx0_frame_valid),
+      .frame_abort(rx0_frame_abort),
+      .bad_block(rx0_bad_block),
+      .sequence_error(rx0_sequence_error),
+      .fcs_result_valid(rx0_fcs_result_valid),
+      .fcs_ok(rx0_fcs_ok)
+  );
 
-    (*DONT_TOUCH = "yes"*)
-    pcs_rx_channel u_pcs_rx_channel (
-        .clk(rx_pcs_clk),
-        .rst(rx_pcs_rst),
-        .rx_data(rx_data[channel]),
-        .rx_header(rx_header[channel]),
-        .rx_data_valid(rx_data_valid[channel]),
-        .rx_header_valid(rx_header_valid[channel]),
-        .rx_start_of_seq(rx_start_of_seq[channel]),
-        .rx_gearbox_slip(rx_gearbox_slip[channel]),
-        .block_lock(rx_block_lock[channel]),
-        .frame_data(rx_frame_data[channel]),
-        .frame_keep(rx_frame_keep[channel]),
-        .frame_start(rx_frame_start[channel]),
-        .frame_end(rx_frame_end[channel]),
-        .frame_valid(rx_frame_valid[channel]),
-        .bad_block(rx_bad_block[channel]),
-        .sequence_error(rx_sequence_error[channel])
-    );
-  end
+  // Channel 1 RX is not used by the v0 application.
+  assign rx_gearbox_slip[1] = 1'b0;
 
 endmodule
