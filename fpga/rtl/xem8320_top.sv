@@ -15,6 +15,10 @@ module xem8320_top (
     output logic [1:0] sfp_rate_select_1
 );
 
+  localparam logic [47:0] LOCAL_MAC = 48'h02_00_00_00_00_01;
+  localparam logic [31:0] LOCAL_IP = 32'hC0A8_0102;
+  localparam logic [15:0] LOCAL_UDP_PORT = 16'd5000;
+
   // Clock and GT status signals
   logic clk_freerun;
   logic tx_pcs_clk;
@@ -60,6 +64,13 @@ module xem8320_top (
 
   logic rx0_fcs_result_valid;
   logic rx0_fcs_ok;
+
+  logic [63:0] rx0_udp_payload_data;
+  logic rx0_udp_payload_start;
+  logic rx0_udp_payload_end;
+  logic rx0_udp_payload_valid;
+  logic rx0_udp_packet_abort;
+  logic rx0_parser_error;
 
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
@@ -142,6 +153,28 @@ module xem8320_top (
       .sequence_error(rx0_sequence_error),
       .fcs_result_valid(rx0_fcs_result_valid),
       .fcs_ok(rx0_fcs_ok)
+  );
+
+  eth_ipv4_udp_rx #(
+      .LOCAL_MAC(LOCAL_MAC),
+      .LOCAL_IP(LOCAL_IP),
+      .LOCAL_UDP_PORT(LOCAL_UDP_PORT)
+  ) u_eth_ipv4_udp_rx (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .frame_data(rx0_frame_data),
+      .frame_keep(rx0_frame_keep),
+      .frame_start(rx0_frame_start),
+      .frame_end(rx0_frame_end),
+      .frame_valid(rx0_frame_valid),
+      .frame_abort(rx0_frame_abort),
+      .udp_payload_data(rx0_udp_payload_data),
+      .udp_payload_start(rx0_udp_payload_start),
+      .udp_payload_end(rx0_udp_payload_end),
+      .udp_payload_valid(rx0_udp_payload_valid),
+      .udp_packet_abort(rx0_udp_packet_abort),
+
+      .parser_error(rx0_parser_error)
   );
 
   // Channel 1 RX is not used by the v0 application.
