@@ -53,6 +53,14 @@ module tb_eth_ipv4_udp_rx;
   int unsigned parser_error_count;
   int unsigned udp_packet_abort_count;
 
+  // ---------------------------------------------------------------------------
+  // Clock
+  // ---------------------------------------------------------------------------
+
+  localparam realtime CLK_PERIOD_NS = 6.20606;
+  initial clk = 1'b0;
+  always #(CLK_PERIOD_NS / 2.0) clk = ~clk;
+
 
   // ---------------------------------------------------------------------------
   // DUT instance
@@ -78,14 +86,6 @@ module tb_eth_ipv4_udp_rx;
       .udp_packet_abort(udp_packet_abort),
       .parser_error(parser_error)
   );
-
-
-  // ---------------------------------------------------------------------------
-  // Clock
-  // ---------------------------------------------------------------------------
-
-  initial clk = 1'b0;
-  always #5ns clk = ~clk;
 
   // ---------------------------------------------------------------------------
   // Low-level input driver
