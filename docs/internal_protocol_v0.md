@@ -453,6 +453,7 @@ All reject predicates should be computed in a fixed-latency datapath. The priori
 - If a UDP payload contains more than one `ORDER_INTENT`, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
 - If any message follows an `ORDER_INTENT` in the same UDP payload, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
 - Protocol errors increment `parser_error_counter`.
+- If a `CONFIG_CONTROL` opcode or its opcode-specific arguments violate the defined format, treat the containing packet as a protocol error.
 
 ### Late frame-integrity failure
 
@@ -491,11 +492,24 @@ Reject the order intent if any of the following is true:
 - `order_price` violates configured price band.
 - `order_notional > max_notional`.
 
-### CONFIG_CONTROL error rules
+### CONFIG_CONTROL protocol errors
 
-- Unknown `config_opcode`: ignore command and increment `config_error_counter`.
-- Invalid `symbol_id` for a symbol-specific command: ignore command and increment `config_error_counter`.
-- Invalid config value: ignore command and increment `config_error_counter`.
+A malformed `CONFIG_CONTROL` invalidates the containing UDP packet.
+
+Treat any of the following as a protocol error:
+
+- unknown or reserved `config_opcode`;
+- invalid `symbol_id` for the selected opcode;
+- reserved config bits set;
+- invalid opcode argument value;
+- nonzero field that the selected opcode requires to be 0.
+
+On error:
+
+- ignore the configuration command;
+- do not modify configuration state;
+- abort all speculative state associated with the containing packet; and
+- increment `parser_error_counter`.
 
 ### Default reset state
 
