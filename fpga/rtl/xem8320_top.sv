@@ -72,6 +72,46 @@ module xem8320_top (
   logic rx0_udp_packet_abort;
   logic rx0_parser_error;
 
+  // Internal message assembler
+  logic [255:0] rx0_message_data;
+  logic rx0_message_valid;
+  logic rx0_message_packet_start;
+  logic rx0_message_packet_end;
+  logic rx0_message_packet_abort;
+  logic rx0_assembler_error;
+
+
+  // Internal protocol decoder
+  logic rx0_decoded_valid;
+  logic [7:0] rx0_decoded_message_type;
+  logic [7:0] rx0_decoded_flags;
+  logic [31:0] rx0_decoded_sequence_number;
+  logic [15:0] rx0_decoded_symbol_id;
+  logic [47:0] rx0_decoded_timestamp;
+  logic [31:0] rx0_decoded_payload_0;
+  logic [31:0] rx0_decoded_payload_1;
+  logic [31:0] rx0_decoded_payload_2;
+  logic [31:0] rx0_decoded_payload_3;
+
+  logic rx0_decoded_packet_start;
+  logic rx0_decoded_packet_end;
+  logic rx0_decoded_packet_abort;
+  logic rx0_protocol_error;
+
+
+  // Temporary integration observability
+  (* MARK_DEBUG = "TRUE" *)
+  logic [239:0] rx0_last_decoded_fields;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic [31:0] rx0_decoded_count;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic [31:0] rx0_error_count;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic [6:0] rx0_last_event_flags;
+
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
   assign tx_data = '0;
@@ -176,6 +216,70 @@ module xem8320_top (
 
       .parser_error(rx0_parser_error)
   );
+
+  internal_message_assembler u_internal_message_assembler (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .udp_payload_data(rx0_udp_payload_data),
+      .udp_payload_start(rx0_udp_payload_start),
+      .udp_payload_end(rx0_udp_payload_end),
+      .udp_payload_valid(rx0_udp_payload_valid),
+      .udp_packet_abort(rx0_udp_packet_abort),
+      .message_data(rx0_message_data),
+      .message_valid(rx0_message_valid),
+      .message_packet_start(rx0_message_packet_start),
+      .message_packet_end(rx0_message_packet_end),
+      .message_packet_abort(rx0_message_packet_abort),
+      .assembler_error(rx0_assembler_error)
+  );
+
+  internal_protocol_decoder u_internal_protocol_decoder (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .message_data(rx0_message_data),
+      .message_valid(rx0_message_valid),
+      .message_packet_start(rx0_message_packet_start),
+      .message_packet_end(rx0_message_packet_end),
+      .message_packet_abort(rx0_message_packet_abort),
+      .decoded_valid(rx0_decoded_valid),
+      .decoded_message_type(rx0_decoded_message_type),
+      .decoded_flags(rx0_decoded_flags),
+      .decoded_sequence_number(rx0_decoded_sequence_number),
+      .decoded_symbol_id(rx0_decoded_symbol_id),
+      .decoded_timestamp(rx0_decoded_timestamp),
+      .decoded_payload_0(rx0_decoded_payload_0),
+      .decoded_payload_1(rx0_decoded_payload_1),
+      .decoded_payload_2(rx0_decoded_payload_2),
+      .decoded_payload_3(rx0_decoded_payload_3),
+      .decoded_packet_start(rx0_decoded_packet_start),
+      .decoded_packet_end(rx0_decoded_packet_end),
+      .decoded_packet_abort(rx0_decoded_packet_abort),
+      .protocol_error(rx0_protocol_error)
+  );
+
+  // temporary consumer
+  always_ff @(posedge rx_pcs_clk) begin
+    if (rx_pcs_rst) begin
+      rx0_last_decoded_fields <= '0;
+      rx0_decoded_count <= '0;
+      rx0_error_count <= '0;
+      rx0_last_event_flags <= '0;
+    end
+    else begin
+      if (rx0_decoded_valid) begin
+        rx0_last_decoded_fields <= {rx0_decoded_payload_3, rx0_decoded_payload_2, rx0_decoded_payload_1, rx0_decoded_payload_0, rx0_decoded_timestamp, rx0_decoded_symbol_id, rx0_decoded_sequence_number, rx0_decoded_flags, rx0_decoded_message_type};
+        rx0_decoded_count <= rx0_decoded_count + 1'b1;
+      end
+
+      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error) begin
+        rx0_error_count <= rx0_error_count + 1'b1;
+      end
+
+      if (rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_assembler_error || rx0_parser_error) begin
+        rx0_last_event_flags <= {rx0_parser_error, rx0_assembler_error, rx0_protocol_error, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
+      end
+    end
+  end
 
   // Channel 1 RX is not used by the v0 application.
   assign rx_gearbox_slip[1] = 1'b0;
