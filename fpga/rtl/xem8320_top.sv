@@ -99,6 +99,18 @@ module xem8320_top (
   logic rx0_protocol_error;
 
 
+  // Packet transaction controller
+  logic rx0_packet_commit;
+  logic rx0_packet_discard;
+
+  logic rx0_integrity_known;
+  logic rx0_integrity_result_valid;
+  logic rx0_integrity_ok;
+  logic rx0_integrity_failure;
+
+  logic rx0_controller_error;
+
+
   // Temporary integration observability
   (* MARK_DEBUG = "TRUE" *)
   logic [239:0] rx0_last_decoded_fields;
@@ -110,7 +122,7 @@ module xem8320_top (
   logic [31:0] rx0_error_count;
 
   (* MARK_DEBUG = "TRUE" *)
-  logic [6:0] rx0_last_event_flags;
+  logic [13:0] rx0_last_event_flags;
 
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
@@ -257,6 +269,24 @@ module xem8320_top (
       .protocol_error(rx0_protocol_error)
   );
 
+  rx_packet_controller u_rx_packet_controller (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .packet_start(rx0_udp_payload_valid && rx0_udp_payload_start),
+      .decode_complete(rx0_decoded_valid && rx0_decoded_packet_end),
+      .frame_abort(rx0_frame_abort),
+      .decode_abort(rx0_decoded_packet_abort),
+      .fcs_result_valid(rx0_fcs_result_valid),
+      .fcs_ok(rx0_fcs_ok),
+      .packet_commit(rx0_packet_commit),
+      .packet_discard(rx0_packet_discard),
+      .integrity_known(rx0_integrity_known),
+      .integrity_result_valid(rx0_integrity_result_valid),
+      .integrity_ok(rx0_integrity_ok),
+      .integrity_failure(rx0_integrity_failure),
+      .controller_error(rx0_controller_error)
+  );
+
   // temporary consumer
   always_ff @(posedge rx_pcs_clk) begin
     if (rx_pcs_rst) begin
@@ -271,12 +301,12 @@ module xem8320_top (
         rx0_decoded_count <= rx0_decoded_count + 1'b1;
       end
 
-      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error) begin
+      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error || rx0_integrity_failure || rx0_controller_error) begin
         rx0_error_count <= rx0_error_count + 1'b1;
       end
 
-      if (rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_assembler_error || rx0_parser_error) begin
-        rx0_last_event_flags <= {rx0_parser_error, rx0_assembler_error, rx0_protocol_error, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
+      if (rx0_packet_commit || rx0_packet_discard || rx0_integrity_result_valid || rx0_controller_error || rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_assembler_error || rx0_parser_error) begin
+        rx0_last_event_flags <= {rx0_parser_error, rx0_assembler_error, rx0_protocol_error, rx0_controller_error, rx0_integrity_failure, rx0_integrity_result_valid, rx0_integrity_ok, rx0_integrity_known, rx0_packet_discard, rx0_packet_commit, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
       end
     end
   end
