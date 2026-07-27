@@ -4,6 +4,7 @@ module rx_packet_controller (
     input logic clk,
     input logic rst,
 
+    input logic packet_failure_event,  // current packet invalid
     input logic packet_start,  // first accepted UDP payload word
     input logic decode_complete,  // final decoded message
     input logic frame_abort,  // physical receive abort with no FCS result
@@ -11,8 +12,9 @@ module rx_packet_controller (
 
     input logic fcs_result_valid,  // FCS verdict available
     input logic fcs_ok,  // verdict value
+
     output logic packet_commit,  // pending writes may update states in BRAM
-    output logic packet_discard,  // pending writes must be discarded
+    output logic packet_discard, // pending writes must be discarded
 
     output logic integrity_known,  // FCS or physical-abort result is known
     output logic integrity_result_valid,  // new integrity result this cycle
@@ -47,14 +49,14 @@ module rx_packet_controller (
   always_comb begin
     fcs_event = packet_pending && !fcs_seen && (frame_abort || fcs_result_valid);
     fcs_event_passed = fcs_result_valid && fcs_ok && !frame_abort;
-    failure_event = packet_pending && (decode_abort || frame_abort || (fcs_event && !fcs_event_passed));
+    failure_event = packet_pending && (decode_abort || frame_abort || packet_failure_event || (fcs_event && !fcs_event_passed));
     decode_ready = decode_done || decode_complete || decode_abort;
     fcs_ready = fcs_seen || fcs_event;
     failure_ready = packet_failed || failure_event;
     resolve_event = packet_pending && decode_ready && fcs_ready;
     commit_event = resolve_event && !failure_ready;
     discard_event = resolve_event && failure_ready;
-    error_event = (packet_start && packet_pending) || (decode_complete && !packet_pending) || (packet_pending && fcs_seen && (frame_abort || fcs_result_valid));
+    error_event = (packet_start && packet_pending) || (decode_complete && !packet_pending) || (packet_failure_event && !packet_pending) || (packet_pending && fcs_seen && (frame_abort || fcs_result_valid));
   end
 
 

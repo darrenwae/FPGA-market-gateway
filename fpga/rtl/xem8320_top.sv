@@ -19,6 +19,9 @@ module xem8320_top (
   localparam logic [31:0] LOCAL_IP = 32'hC0A8_0102;
   localparam logic [15:0] LOCAL_UDP_PORT = 16'd5000;
 
+  localparam logic [7:0] CONFIG_CONTROL_MESSAGE = 8'h05;
+  localparam logic [31:0] CONFIG_RESET_ALL = 32'h0000_0001;
+
   // Clock and GT status signals
   logic clk_freerun;
   logic tx_pcs_clk;
@@ -99,7 +102,7 @@ module xem8320_top (
   logic rx0_protocol_error;
 
 
-  // Packet transaction controller
+  // Packet controller
   logic rx0_packet_commit;
   logic rx0_packet_discard;
 
@@ -107,8 +110,21 @@ module xem8320_top (
   logic rx0_integrity_result_valid;
   logic rx0_integrity_ok;
   logic rx0_integrity_failure;
-
   logic rx0_controller_error;
+
+  logic rx0_message_is_reset_all;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic rx0_sequence_mismatch_event;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic rx0_stream_fault;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic rx0_effective_stream_fault;
+
+  (* MARK_DEBUG = "TRUE" *)
+  logic [31:0] rx0_verified_next_sequence_number;
 
 
   // Temporary integration observability
@@ -124,6 +140,8 @@ module xem8320_top (
   (* MARK_DEBUG = "TRUE" *)
   logic [13:0] rx0_last_event_flags;
 
+
+  assign rx0_message_is_reset_all = rx0_decoded_valid && (rx0_decoded_message_type == CONFIG_CONTROL_MESSAGE) && (rx0_decoded_payload_0 == CONFIG_RESET_ALL);
 
   // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
   assign tx_data = '0;
@@ -269,9 +287,27 @@ module xem8320_top (
       .protocol_error(rx0_protocol_error)
   );
 
+  downstream_sequence_tracker u_downstream_sequence_tracker (
+      .clk(rx_pcs_clk),
+      .rst(rx_pcs_rst),
+      .message_valid(rx0_decoded_valid),
+      .message_sequence_number(rx0_decoded_sequence_number),
+      .message_packet_start(rx0_decoded_packet_start),
+      .message_packet_end(rx0_decoded_packet_end),
+      .message_is_reset_all(rx0_message_is_reset_all),
+      .packet_commit(rx0_packet_commit),
+      .packet_discard(rx0_packet_discard),
+      .integrity_failure(rx0_integrity_failure),
+      .sequence_mismatch_event(rx0_sequence_mismatch_event),
+      .stream_fault(rx0_stream_fault),
+      .effective_stream_fault(rx0_effective_stream_fault),
+      .verified_next_sequence_number(rx0_verified_next_sequence_number)
+  );
+
   rx_packet_controller u_rx_packet_controller (
       .clk(rx_pcs_clk),
       .rst(rx_pcs_rst),
+      .packet_failure_event(rx0_sequence_mismatch_event),
       .packet_start(rx0_udp_payload_valid && rx0_udp_payload_start),
       .decode_complete(rx0_decoded_valid && rx0_decoded_packet_end),
       .frame_abort(rx0_frame_abort),
@@ -301,7 +337,7 @@ module xem8320_top (
         rx0_decoded_count <= rx0_decoded_count + 1'b1;
       end
 
-      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error || rx0_integrity_failure || rx0_controller_error) begin
+      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error || rx0_integrity_failure || rx0_sequence_mismatch_event || rx0_controller_error) begin
         rx0_error_count <= rx0_error_count + 1'b1;
       end
 

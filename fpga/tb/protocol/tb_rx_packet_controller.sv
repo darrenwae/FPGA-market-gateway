@@ -14,7 +14,7 @@ module tb_rx_packet_controller;
 
   logic clk;
   logic rst;
-
+  logic packet_failure_event;
   logic packet_start;
   logic decode_complete;
   logic decode_abort;
@@ -48,6 +48,7 @@ module tb_rx_packet_controller;
   rx_packet_controller dut (
       .clk(clk),
       .rst(rst),
+      .packet_failure_event(packet_failure_event),
       .packet_start(packet_start),
       .decode_complete(decode_complete),
       .decode_abort(decode_abort),
@@ -86,24 +87,33 @@ module tb_rx_packet_controller;
       frame_abort = 1'b0;
       fcs_result_valid = 1'b0;
       fcs_ok = 1'b0;
-
+      packet_failure_event = 1'b0;
       error_count = 0;
     end
   endtask
 
 
-  task automatic drive_events(input logic start, input logic complete, input logic decode_failed, input logic frame_failed, input logic fcs_valid, input logic fcs_passed);
+  task automatic drive_events_with_failure(input logic start, input logic complete, input logic decode_failed, input logic frame_failed, input logic fcs_valid, input logic fcs_passed, input logic packet_failed);
     begin
       @(negedge clk);
+
       packet_start = start;
       decode_complete = complete;
       decode_abort = decode_failed;
       frame_abort = frame_failed;
       fcs_result_valid = fcs_valid;
       fcs_ok = fcs_passed;
+      packet_failure_event = packet_failed;
 
       @(posedge clk);
       #1ps;
+    end
+  endtask
+
+
+  task automatic drive_events(input logic start, input logic complete, input logic decode_failed, input logic frame_failed, input logic fcs_valid, input logic fcs_passed);
+    begin
+      drive_events_with_failure(start, complete, decode_failed, frame_failed, fcs_valid, fcs_passed, 1'b0);
     end
   endtask
 
@@ -119,6 +129,7 @@ module tb_rx_packet_controller;
     begin
       @(negedge clk);
       packet_start = 1'b0;
+      packet_failure_event = 1'b0;
       decode_complete = 1'b0;
       decode_abort = 1'b0;
       frame_abort = 1'b0;
@@ -600,6 +611,15 @@ module tb_rx_packet_controller;
       drive_idle();
       check_condition(controller_error === 1'b0, "duplicate-FCS error did not clear after one cycle");
 
+      // packet_failure_event without an active packet is invalid.
+      reset_dut();
+      drive_events_with_failure(1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b1);
+      check_condition(controller_error === 1'b1, "untracked packet_failure_event did not assert controller_error");
+      check_condition(packet_commit === 1'b0, "untracked packet_failure_event caused a commit");
+      check_condition(packet_discard === 1'b0, "untracked packet_failure_event caused a discard");
+      drive_idle();
+
+      check_condition(controller_error === 1'b0, "untracked packet_failure_event error did not clear after one cycle");
       finish_test("controller errors");
     end
   endtask
@@ -631,6 +651,7 @@ module tb_rx_packet_controller;
 
       // Start another packet without resetting the controller.
       drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+      ;
       check_no_pulses("after recovery-packet start");
       check_condition(integrity_known === 1'b0, "new packet did not clear the previous integrity result");
       check_condition(integrity_ok === 1'b0, "new packet retained the previous integrity value");
@@ -649,6 +670,53 @@ module tb_rx_packet_controller;
       check_no_pulses("after recovery-packet commit");
 
       finish_test("recovery without reset");
+    end
+  endtask
+
+
+  task automatic test_packet_failure_waits_for_resolution;
+    begin
+      $display("TEST: packet failure waits for resolution");
+
+      error_count = 0;
+      reset_dut();
+
+      // Start the packet.
+      drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
+
+      check_no_pulses("after packet start");
+      check_condition(integrity_known === 1'b0, "integrity became known before an FCS result");
+
+      // A logical failure occurs while decoding is still active.
+      drive_events_with_failure(1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b1);
+      check_condition(packet_commit === 1'b0, "packet committed when packet_failure_event was asserted");
+      check_condition(packet_discard === 1'b0, "packet discarded before decoding completed");
+      check_condition(integrity_result_valid === 1'b0, "logical packet failure incorrectly produced an integrity result");
+      check_condition(integrity_failure === 1'b0, "logical packet failure incorrectly asserted integrity_failure");
+      check_condition(controller_error === 1'b0, "tracked packet_failure_event caused a controller error");
+
+      // The Ethernet frame itself passes FCS.
+      drive_events(1'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b1);
+      check_condition(integrity_result_valid === 1'b1, "good FCS did not assert integrity_result_valid");
+      check_condition(integrity_known === 1'b1, "good FCS did not set integrity_known");
+      check_condition(integrity_ok === 1'b1, "good FCS did not set integrity_ok");
+      check_condition(integrity_failure === 1'b0, "good FCS incorrectly asserted integrity_failure");
+      check_condition(packet_commit === 1'b0, "logically failed packet committed before decoding completed");
+      check_condition(packet_discard === 1'b0, "packet discarded before decoding completed");
+      check_condition(controller_error === 1'b0, "good FCS caused a controller error");
+
+      // Decode completion resolves the transaction.
+      drive_events(1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b0);
+      check_condition(packet_commit === 1'b0, "logically failed packet was committed");
+      check_condition(packet_discard === 1'b1, "logically failed packet was not discarded");
+      check_condition(integrity_failure === 1'b0, "logical packet failure was incorrectly reported as an FCS failure");
+      check_condition(controller_error === 1'b0, "packet resolution caused a controller error");
+
+      // Discard is a one-cycle pulse.
+      drive_idle();
+      check_no_pulses("after logical packet discard");
+
+      finish_test("packet failure waits for resolution");
     end
   endtask
 
@@ -673,7 +741,7 @@ module tb_rx_packet_controller;
     test_untracked_fcs_ignored();
     test_controller_errors();
     test_recovery_without_reset();
-
+    test_packet_failure_waits_for_resolution();
     $display("PASS: ALL TESTS PASSED");
     $finish;
   end
