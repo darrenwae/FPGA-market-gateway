@@ -238,8 +238,6 @@ It then produces either `packet_commit` or `packet_discard`.
 
 ## Packet resolution
 
-## Packet resolution
-
 <p align="center">
   <img src="assets/packet_resolution.png"
        alt="RX packet controller resolution flow"
