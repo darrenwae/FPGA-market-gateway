@@ -236,7 +236,7 @@ module tb_eth_rx_fcs_checker;
       word_keep = '0;
 
       for (int lane = 0; lane < final_byte_count; lane++) begin
-        word_data[lane*8 +:8] = valid_frame[byte_index+lane];
+        word_data[lane*8+:8] = valid_frame[byte_index+lane];
         word_keep[lane] = 1'b1;
       end
 
@@ -261,6 +261,8 @@ module tb_eth_rx_fcs_checker;
       frame_end = 1'b0;
       frame_abort = 1'b0;
 
+      // Allow the registered FCS input to be processed.
+      @(posedge clk);
       #1ps;
     end
 

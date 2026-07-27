@@ -1,4 +1,4 @@
-// Checks the Ethernet FCS of each received frame.
+// Checks the Ethernet FCS of each received frame
 // The late verdict is used by the TX path to commit or poison a speculative ORDER_DECISION response.
 
 module eth_rx_fcs_checker (
@@ -63,6 +63,34 @@ module eth_rx_fcs_checker (
   logic [31:0] crc_after_word;
   logic [2:0] skip_after_word;
 
+  logic [63:0] frame_data_pipe;  // Registered FCS frame data
+  logic [7:0] frame_keep_pipe;  // Registered valid-byte mask
+  logic frame_start_pipe;  // Registered frame start
+  logic frame_end_pipe;  // Registered frame end
+  logic frame_valid_pipe;  // Registered frame valid
+  logic frame_abort_pipe;  // Registered physical abort
+
+
+  // Isolates the CRC path from combinational PCS decoding.
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      frame_data_pipe <= '0;
+      frame_keep_pipe <= '0;
+      frame_start_pipe <= 1'b0;
+      frame_end_pipe <= 1'b0;
+      frame_valid_pipe <= 1'b0;
+      frame_abort_pipe <= 1'b0;
+    end
+    else begin
+      frame_data_pipe <= frame_data;
+      frame_keep_pipe <= frame_keep;
+      frame_start_pipe <= frame_start;
+      frame_end_pipe <= frame_end;
+      frame_valid_pipe <= frame_valid;
+      frame_abort_pipe <= frame_abort;
+    end
+  end
+
   always_ff @(posedge clk) begin
     if (rst) begin
       inside_frame <= 1'b0;
@@ -73,39 +101,37 @@ module eth_rx_fcs_checker (
     end
     else begin
       fcs_result_valid <= 1'b0;
-      if (frame_abort) begin
+
+      if (frame_abort_pipe) begin
         inside_frame <= 1'b0;
         skip_remaining <= '0;
         crc_state <= '0;
         fcs_ok <= 1'b0;
       end
       else begin
-        if (frame_valid && (inside_frame || frame_start)) begin
+        if (frame_valid_pipe && (inside_frame || frame_start_pipe)) begin
           crc_state <= crc_after_word;
           skip_remaining <= skip_after_word;
         end
-        if (frame_valid && frame_start) begin
+
+        if (frame_valid_pipe && frame_start_pipe) begin
           inside_frame <= 1'b1;
           fcs_ok <= 1'b0;
         end
 
-        // A valid frame_end is expected only while processing a frame.
-        if (frame_valid && frame_end && inside_frame) begin
+        if (frame_valid_pipe && frame_end_pipe && inside_frame) begin
           inside_frame <= 1'b0;
           fcs_result_valid <= 1'b1;
+
           fcs_ok <= (skip_after_word == 3'd0) && (crc_after_word == CRC32_RESIDUE);
         end
       end
     end
   end
 
-  // Calculates the CRC and preamble-skip state after the current word.
-  // Blocking assignments are used because each chronological byte depends
-  // on the result produced by the preceding byte.
+  // Calculates the CRC state after the registered frame word.
   always_comb begin
-    // A start word begins a new CRC calculation. Later words continue
-    // from the registered state of the current frame.
-    if (frame_start) begin
+    if (frame_start_pipe) begin
       crc_after_word = 32'hFFFF_FFFF;
       skip_after_word = 3'd7;
     end
@@ -114,19 +140,14 @@ module eth_rx_fcs_checker (
       skip_after_word = skip_remaining;
     end
 
-    // The start word must be processed even though inside_frame has not
-    // yet been updated by the sequential logic.
-    if (frame_valid && (inside_frame || frame_start)) begin
+    if (frame_valid_pipe && (inside_frame || frame_start_pipe)) begin
       for (int i = 0; i < 8; i++) begin
-        if (frame_keep[i]) begin
-          // Skip the remaining preamble/SFD bytes before starting CRC.
+        if (frame_keep_pipe[i]) begin
           if (skip_after_word != 3'd0) begin
             skip_after_word = skip_after_word - 3'd1;
           end
           else begin
-            // frame_data[7:0] is the earliest byte, so lanes are
-            // processed from i = 0 through i = 7.
-            crc_after_word = crc32_update_byte(crc_after_word, frame_data[i*8+:8]);
+            crc_after_word = crc32_update_byte(crc_after_word, frame_data_pipe[i*8+:8]);
           end
         end
       end
