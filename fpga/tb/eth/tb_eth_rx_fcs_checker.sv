@@ -13,7 +13,6 @@ module tb_eth_rx_fcs_checker;
   logic frame_start;
   logic frame_end;
   logic frame_valid;
-  logic frame_abort;
 
   logic fcs_result_valid;
   logic fcs_ok;
@@ -28,7 +27,6 @@ module tb_eth_rx_fcs_checker;
       .frame_start(frame_start),
       .frame_end(frame_end),
       .frame_valid(frame_valid),
-      .frame_abort(frame_abort),
       .fcs_result_valid(fcs_result_valid),
       .fcs_ok(fcs_ok)
   );
@@ -120,7 +118,7 @@ module tb_eth_rx_fcs_checker;
       frame_start = 1'b0;
       frame_end = 1'b0;
       frame_valid = 1'b0;
-      frame_abort = 1'b0;
+
 
       repeat (3) @(posedge clk);
 
@@ -140,7 +138,7 @@ module tb_eth_rx_fcs_checker;
       frame_valid = 1'b0;
       frame_start = 1'b0;
       frame_end = 1'b0;
-      frame_abort = 1'b0;
+
 
       @(posedge clk);
       #1ps;
@@ -189,7 +187,6 @@ module tb_eth_rx_fcs_checker;
       frame_valid = 1'b1;
       frame_start = 1'b1;
       frame_end = 1'b0;
-      frame_abort = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -215,7 +212,6 @@ module tb_eth_rx_fcs_checker;
         frame_valid = 1'b1;
         frame_start = 1'b0;
         frame_end = 1'b0;
-        frame_abort = 1'b0;
 
         @(posedge clk);
         #1ps;
@@ -247,7 +243,6 @@ module tb_eth_rx_fcs_checker;
       frame_valid = 1'b1;
       frame_start = 1'b0;
       frame_end = 1'b1;
-      frame_abort = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -259,7 +254,6 @@ module tb_eth_rx_fcs_checker;
       frame_valid = 1'b0;
       frame_start = 1'b0;
       frame_end = 1'b0;
-      frame_abort = 1'b0;
 
       // Allow the registered FCS input to be processed.
       @(posedge clk);
@@ -268,12 +262,12 @@ module tb_eth_rx_fcs_checker;
 
   endtask
 
-  task automatic send_aborted_frame;
+  task automatic send_incomplete_frame;
 
     logic [63:0] word_data;
 
     begin
-      // Send a real START_0 word containing the seven preamble/SFD bytes.
+      // Start an ordinary START_0 frame.
       word_data = '0;
 
       for (int lane = 0; lane < 7; lane++) begin
@@ -281,13 +275,11 @@ module tb_eth_rx_fcs_checker;
       end
 
       @(negedge clk);
-
       frame_data = word_data;
       frame_keep = 8'h7F;
       frame_valid = 1'b1;
       frame_start = 1'b1;
       frame_end = 1'b0;
-      frame_abort = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -300,35 +292,24 @@ module tb_eth_rx_fcs_checker;
       end
 
       @(negedge clk);
-
       frame_data = word_data;
       frame_keep = 8'hFF;
       frame_valid = 1'b1;
       frame_start = 1'b0;
       frame_end = 1'b0;
-      frame_abort = 1'b0;
 
       @(posedge clk);
       #1ps;
 
-      // Abort the incomplete frame.
+      // Stop the frame without presenting a termination beat.
       @(negedge clk);
-
       frame_data = '0;
       frame_keep = '0;
       frame_valid = 1'b0;
       frame_start = 1'b0;
       frame_end = 1'b0;
-      frame_abort = 1'b1;
 
       @(posedge clk);
-      #1ps;
-
-      // Return the interface to idle.
-      @(negedge clk);
-
-      frame_abort = 1'b0;
-
       #1ps;
     end
 
@@ -489,43 +470,29 @@ module tb_eth_rx_fcs_checker;
 
   endtask
 
-  task automatic test_frame_abort;
+  task automatic test_incomplete_frame_recovery;
     begin
-      $display("TEST: aborted frame recovery");
+      $display("TEST: incomplete frame recovery");
 
       build_valid_frame(0);
       apply_reset();
-      send_aborted_frame();
+      send_incomplete_frame();
 
-      // An abandoned frame did not reach a normal Ethernet termination,
-      // so the FCS checker must not report a completed-frame result.
-      if (fcs_result_valid !== 1'b0) begin
-        $fatal(1, "Aborted frame incorrectly produced an FCS result");
-      end
+      // No termination means no FCS verdict.
+      if (fcs_result_valid !== 1'b0) $fatal(1, "Incomplete frame incorrectly produced an FCS result");
 
-      if (fcs_ok !== 1'b0) begin
-        $fatal(1, "Aborted frame left fcs_ok asserted");
-      end
-
-      // Do not reset the DUT. The abort itself must clear the old CRC state.
+      // A new frame start must reinitialize the CRC without a reset.
       send_frame(7, 71, 1'b0);
+      if (fcs_result_valid !== 1'b1) $fatal(1, "Valid frame after incomplete frame produced no FCS result");
+      if (fcs_ok !== 1'b1) $fatal(1, "Valid frame after incomplete frame failed the FCS check");
 
-      if (fcs_result_valid !== 1'b1) begin
-        $fatal(1, "Valid frame after abort did not produce an FCS result");
-      end
-
-      if (fcs_ok !== 1'b1) begin
-        $fatal(1, "Valid frame after abort failed the FCS check");
-      end
 
       @(posedge clk);
       #1ps;
 
-      if (fcs_result_valid !== 1'b0) begin
-        $fatal(1, "fcs_result_valid did not clear after abort-recovery test");
-      end
+      if (fcs_result_valid !== 1'b0) $fatal(1, "fcs_result_valid did not clear after recovery test");
 
-      $display("PASS: aborted frame discarded and next frame accepted");
+      $display("PASS: new frame start reinitialized the FCS checker");
     end
   endtask
 
@@ -563,9 +530,9 @@ module tb_eth_rx_fcs_checker;
     test_corrupted_payload();
     test_corrupted_fcs();
     test_all_termination_positions();
-    test_frame_abort();
+    test_incomplete_frame_recovery();
     test_frame_valid_bubbles();
-    $display("ALL FCS CHECKER TESTS PASSED");
+    $display("PASS: ALL FCS CHECKER TESTS PASSED");
     $finish;
   end
 

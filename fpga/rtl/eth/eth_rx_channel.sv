@@ -54,7 +54,6 @@ module eth_rx_channel (
       .frame_start(frame_start),
       .frame_end(frame_end),
       .frame_valid(frame_valid),
-      .frame_abort(frame_abort),
       .fcs_result_valid(fcs_result_valid),
       .fcs_ok(fcs_ok)
   );

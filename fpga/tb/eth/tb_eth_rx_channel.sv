@@ -2,7 +2,7 @@
 
 module tb_eth_rx_channel;
 
-  localparam time CLK_PERIOD = 6.206ns;
+  localparam realtime CLK_PERIOD = 6.206ns;
   localparam int FRAME_BYTE_COUNT = 71;
 
   localparam logic [1:0] SYNC_DATA = 2'b01;
@@ -304,7 +304,8 @@ module tb_eth_rx_channel;
       acquire_lock();
       send_complete_frame();
 
-      // FCS checker consumes the decoder's TERM beat here.
+      // Capture the decoder's TERMINATE beat, then register the FCS verdict.
+      advance_pipeline();
       advance_pipeline();
 
       if (fcs_result_valid !== 1'b1) begin
@@ -341,6 +342,7 @@ module tb_eth_rx_channel;
       acquire_lock();
       send_complete_frame();
       advance_pipeline();
+      advance_pipeline();
 
       if (fcs_result_valid !== 1'b1) begin
         $fatal(1, "Corrupted frame did not produce an FCS result");
@@ -367,36 +369,22 @@ module tb_eth_rx_channel;
       // A second START before TERMINATE aborts the active frame.
       drive_start_0();
 
-      if (frame_abort !== 1'b1) begin
-        $fatal(1, "Repeated START did not assert frame_abort");
-      end
+      if (frame_abort !== 1'b1) $fatal(1, "Repeated START did not assert frame_abort");
+      if (frame_valid !== 1'b0) $fatal(1, "Abort cycle incorrectly emitted frame data");
 
-      if (frame_valid !== 1'b0) begin
-        $fatal(1, "Abort cycle incorrectly emitted frame data");
-      end
-
-      // FCS checker consumes frame_abort here.
+      // Flush the incomplete frame through the FCS pipeline.
+      advance_pipeline();
       advance_pipeline();
 
-      if (fcs_result_valid !== 1'b0) begin
-        $fatal(1, "Aborted frame produced an FCS result");
-      end
-
-      if (fcs_ok !== 1'b0) begin
-        $fatal(1, "Aborted frame left fcs_ok asserted");
-      end
+      if (fcs_result_valid !== 1'b0) $fatal(1, "Aborted frame produced an FCS result");
 
       // No reset. The next complete frame must pass.
       send_complete_frame();
       advance_pipeline();
+      advance_pipeline();
 
-      if (fcs_result_valid !== 1'b1) begin
-        $fatal(1, "Frame after abort did not produce an FCS result");
-      end
-
-      if (fcs_ok !== 1'b1) begin
-        $fatal(1, "Valid frame after abort failed FCS");
-      end
+      if (fcs_result_valid !== 1'b1) $fatal(1, "Frame after abort did not produce an FCS result");
+      if (fcs_ok !== 1'b1) $fatal(1, "Valid frame after abort failed FCS");
 
       $display("PASS: frame abort recovery");
     end

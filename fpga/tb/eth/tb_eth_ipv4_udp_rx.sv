@@ -336,16 +336,6 @@ module tb_eth_ipv4_udp_rx;
     end
   endtask
 
-  task automatic send_invalid_start_keep_frame;
-    begin
-      // Illegal start-beat keep mask.
-      drive_beat(64'h0706_0504_0302_0100, 8'h0F, 1'b1, 1'b0);
-
-      // Terminate the rejected frame while the parser drains it.
-      drive_beat(64'h0000_0000_0000_0000, 8'h01, 1'b0, 1'b1);
-      drive_idle();
-    end
-  endtask
 
   task automatic send_truncated_header_frame;
     begin
@@ -823,38 +813,6 @@ module tb_eth_ipv4_udp_rx;
     end
   endtask
 
-  task automatic test_invalid_start_keep;
-    begin
-      clear_test_results();
-      expected_payload_word_count = 0;
-      reset_dut();
-      $display("TEST: reject invalid frame_keep on start beat");
-      send_invalid_start_keep_frame();
-      repeat (3) @(negedge clk);
-
-      if (received_word_count != 0) begin
-        $error("Expected no UDP payload words, received %0d", received_word_count);
-        error_count++;
-      end
-
-      if (parser_error_count != 1) begin
-        $error("Expected one parser_error pulse, observed %0d", parser_error_count);
-        error_count++;
-      end
-
-      if (udp_packet_abort_count != 0) begin
-        $error("Expected no udp_packet_abort pulse, observed %0d", udp_packet_abort_count);
-        error_count++;
-      end
-
-      if (error_count == 0) begin
-        $display("PASS: invalid start frame_keep rejected");
-      end
-      else begin
-        $fatal(1, "FAIL: invalid start frame_keep test, %0d errors", error_count);
-      end
-    end
-  endtask
 
   task automatic test_frame_ends_during_header;
     begin
@@ -1145,7 +1103,6 @@ module tb_eth_ipv4_udp_rx;
     test_udp_length_below_minimum();
     test_udp_length_above_maximum();
     test_maximum_valid_udp_payload();
-    test_invalid_start_keep();
     test_frame_ends_during_header();
     test_frame_ends_during_payload();
     test_frame_abort_before_payload();

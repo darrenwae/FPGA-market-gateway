@@ -53,6 +53,7 @@ module eth_ipv4_udp_rx #(
 
   logic udp_length_present;
   logic [15:0] udp_length_candidate;
+  logic udp_length_invalid;
   logic udp_length_candidate_valid;
   logic final_payload_input_valid;
 
@@ -112,6 +113,7 @@ module eth_ipv4_udp_rx #(
       udp_payload_end <= 1'b0;
       udp_payload_valid <= 1'b0;
       udp_packet_abort <= 1'b0;
+      udp_length_invalid <= 1'b0;
       parser_error <= 1'b0;
     end
     else begin
@@ -127,6 +129,7 @@ module eth_ipv4_udp_rx #(
         previous_frame_data <= '0;
         payload_started <= 1'b0;
         payload_words_remaining <= '0;
+        udp_length_invalid <= 1'b0;
 
         if (payload_started) begin
           udp_packet_abort <= 1'b1;
@@ -140,26 +143,18 @@ module eth_ipv4_udp_rx #(
               previous_frame_data <= '0;
               payload_started <= 1'b0;
               payload_words_remaining <= '0;
+              udp_length_invalid <= 1'b0;
 
-              case (frame_keep)
-                8'h7F: begin
-                  // START_0: 7 initial data bytes
-                  payload_alignment <= START_0_ALIGNMENT;
-                  header_bytes_discarded <= 6'd7;
-                  state <= HEADER;
-                end
-                8'h07: begin
-                  //START_4: 3 initial data bytes
-                  payload_alignment <= START_4_ALIGNMENT;
-                  header_bytes_discarded <= 6'd3;
-                  state <= HEADER;
-                end
-                default: begin
-                  parser_error <= 1'b1;
-                  payload_started <= 1'b0;
-                  state <= DRAIN;
-                end
-              endcase
+              if (frame_keep == 8'h7F) begin
+                payload_alignment <= START_0_ALIGNMENT;
+                header_bytes_discarded <= 6'd7;
+              end
+              else begin
+                payload_alignment <= START_4_ALIGNMENT;
+                header_bytes_discarded <= 6'd3;
+              end
+
+              state <= HEADER;
             end
           end
 
@@ -178,15 +173,10 @@ module eth_ipv4_udp_rx #(
                   state <= DRAIN;
                 end
               end
-              else if (udp_length_present && !udp_length_candidate_valid) begin
-                parser_error <= 1'b1;
-                payload_words_remaining <= '0;
-                state <= DRAIN;
-              end
               else begin
                 if (udp_length_present) begin
-                  // Divide UDP length by 8, then remove the one-word UDP header
                   payload_words_remaining <= udp_length_candidate[10:3] - 8'd1;
+                  udp_length_invalid <= !udp_length_candidate_valid;
                 end
 
                 if (header_bytes_discarded + 6'd8 >= 6'd49) begin
@@ -203,7 +193,7 @@ module eth_ipv4_udp_rx #(
 
           PAYLOAD: begin
             if (frame_valid) begin
-              if (payload_words_remaining == 8'd0) begin
+              if (udp_length_invalid) begin
                 parser_error <= 1'b1;
                 udp_packet_abort <= payload_started;
                 payload_started <= 1'b0;
