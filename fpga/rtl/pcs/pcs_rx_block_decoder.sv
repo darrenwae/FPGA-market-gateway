@@ -147,42 +147,40 @@ module pcs_rx_block_decoder (
               // if idle frame appear in frame, current frame ended abnormally
               if (inside_frame) begin
                 sequence_error = 1'b1;
-                inside_frame_next = 1'b0;
               end
             end
 
             BLOCK_TYPE_START_0: begin
-              frame_data[55:0] = normalized_data[63:8];  // first byte occupied by START
-              frame_keep = 8'h7F;
-              frame_start = 1'b1;
-              frame_valid = 1'b1;
-
               if (inside_frame) begin
                 // START appear before termination is sequence error
                 sequence_error = 1'b1;
               end
-              inside_frame_next = 1'b1;
-            end
-
-            BLOCK_TYPE_START_4: begin
-              // lane 0 to 3 contains IDLE bytes
-              if (normalized_data[39:8] != 32'b0) begin
-                bad_block = 1'b1;
-              end
               else begin
-                // START occupies PCS lane 4 and is removed here
-                // PCS lanes 5 to 7 become output byte lanes 0 to 2
-                frame_data[23:0] = normalized_data[63:40];
-                frame_keep = 8'h07;
+                frame_data[55:0] = normalized_data[63:8];  // first byte occupied by START
+                frame_keep = 8'h7F;
                 frame_start = 1'b1;
                 frame_valid = 1'b1;
-
-                if (inside_frame) begin
-                  sequence_error = 1'b1;
-                end
                 inside_frame_next = 1'b1;
               end
             end
+
+            BLOCK_TYPE_START_4: begin
+              if (normalized_data[39:8] != 32'b0) begin
+                // lane 0 to 3 contains IDLE bytes
+                bad_block = 1'b1;
+              end
+              else if (inside_frame) begin
+                sequence_error = 1'b1;
+              end
+              else begin
+                frame_data[23:0] = normalized_data[63:40];  // START occupies PCS lane 4 and is removed here, PCS lanes 5 to 7 become output byte lanes 0 to 2
+                frame_keep = 8'h07;
+                frame_start = 1'b1;
+                frame_valid = 1'b1;
+                inside_frame_next = 1'b1;
+              end
+            end
+
             BLOCK_TYPE_TERM_0, BLOCK_TYPE_TERM_1, BLOCK_TYPE_TERM_2, BLOCK_TYPE_TERM_3, BLOCK_TYPE_TERM_4, BLOCK_TYPE_TERM_5, BLOCK_TYPE_TERM_6, BLOCK_TYPE_TERM_7: begin
               if (!term_format_valid) begin
                 bad_block = 1'b1;
@@ -219,11 +217,6 @@ module pcs_rx_block_decoder (
     // Suppress the offending block and return to the idle frame state
     if ((bad_block || sequence_error) && inside_frame) begin
       inside_frame_next = 1'b0;
-      frame_data = '0;
-      frame_keep = '0;
-      frame_start = 1'b0;
-      frame_end = 1'b0;
-      frame_valid = 1'b0;
       frame_abort = 1'b1;
     end
   end

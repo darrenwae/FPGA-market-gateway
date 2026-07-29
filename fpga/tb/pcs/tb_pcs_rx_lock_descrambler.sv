@@ -11,7 +11,6 @@ module tb_pcs_rx_lock_descrambler;
   logic [5:0] rx_header;
   logic [1:0] rx_data_valid;
   logic [1:0] rx_header_valid;
-  logic [1:0] rx_start_of_seq;
   logic rx_gearbox_slip;
 
   logic [63:0] block_payload;
@@ -40,7 +39,6 @@ module tb_pcs_rx_lock_descrambler;
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
-      .rx_start_of_seq(rx_start_of_seq),
       .rx_gearbox_slip(rx_gearbox_slip),
       .block_payload(block_payload),
       .block_header(block_header),
@@ -67,7 +65,6 @@ module tb_pcs_rx_lock_descrambler;
       rx_header = '0;
       rx_data_valid = '0;
       rx_header_valid = '0;
-      rx_start_of_seq = '0;
       tx_lfsr = '0;
     end
   endtask
@@ -80,7 +77,6 @@ module tb_pcs_rx_lock_descrambler;
       rx_header = '0;
       rx_data_valid = '0;
       rx_header_valid = '0;
-      rx_start_of_seq = '0;
 
       // Change reset away from the active clock edge.
       @(negedge clk);
@@ -107,7 +103,6 @@ module tb_pcs_rx_lock_descrambler;
       rx_header = {4'b0000, header};
       rx_data_valid = valid ? 2'b01 : 2'b00;
       rx_header_valid = valid ? 2'b01 : 2'b00;
-      rx_start_of_seq = 2'b00;
 
       @(posedge clk);
       #1ps;
@@ -143,7 +138,6 @@ module tb_pcs_rx_lock_descrambler;
       // Begin acquisition but do not reach the threshold.
       for (int i = 0; i < 20; i++) begin
         drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted during partial acquisition");
       end
 
@@ -151,28 +145,23 @@ module tb_pcs_rx_lock_descrambler;
       drive_gearbox_sample(64'h0, 2'b00, 1'b1);
 
       if (rx_gearbox_slip !== 1'b1) $fatal(1, "Expected gearbox-slip pulse after illegal header");
-
       if (block_lock !== 1'b0) $fatal(1, "Block lock asserted after illegal header");
 
       // The GT gearbox requires 32 RX clock cycles after a slip.
       for (int i = 0; i < 32; i++) begin
         drive_gearbox_sample(64'h0, 2'b00, 1'b0);
-
         if (rx_gearbox_slip !== 1'b0) $fatal(1, "Gearbox-slip pulse lasted longer than one cycle");
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted during slip wait");
       end
 
       // Lock on established after 64 consecutive legal header observed.
       for (int i = 0; i < 63; i++) begin
         drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted before 64 legal headers");
       end
 
       // The 64th consecutive legal header establishes block lock.
       drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
       if (block_lock !== 1'b1) $fatal(1, "Block lock did not assert after 64 legal headers");
 
       $display("PASS: acquisition and slip wait");
@@ -188,7 +177,6 @@ module tb_pcs_rx_lock_descrambler;
       // Accumulate 32 legal headers.
       for (int i = 0; i < 32; i++) begin
         drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted too early");
       end
 
@@ -196,22 +184,18 @@ module tb_pcs_rx_lock_descrambler;
       // They must neither advance nor clear the acquisition count.
       for (int i = 0; i < 7; i++) begin
         drive_gearbox_sample(64'h0, 2'b00, 1'b0);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted during gearbox bubble");
-
         if (rx_gearbox_slip !== 1'b0) $fatal(1, "Gearbox bubble incorrectly caused a slip");
       end
 
       // Reach 63 total real legal headers.
       for (int i = 0; i < 31; i++) begin
         drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted before 64 real headers");
       end
 
       // The next real legal header is number 64.
       drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
       if (block_lock !== 1'b1) $fatal(1, "Gearbox bubbles incorrectly disturbed acquisition");
 
       $display("PASS: acquisition with gearbox bubbles");
@@ -245,12 +229,10 @@ module tb_pcs_rx_lock_descrambler;
       plaintext = 64'h0123_4567_89AB_CDEF;
       scramble_block(plaintext, scrambled);
       drive_gearbox_sample(scrambled, 2'b10, 1'b1);
-
       if (descrambled_payload_valid !== 1'b0) $fatal(1, "Descrambler exposed synchronization block");
 
       // Bubble must not advance the receiver LFSR.
       drive_gearbox_sample(64'h0, 2'b00, 1'b0);
-
       if (descrambled_payload_valid !== 1'b0) $fatal(1, "Descrambler asserted valid during gearbox bubble");
 
       // Check several consecutive complete blocks.
@@ -258,11 +240,8 @@ module tb_pcs_rx_lock_descrambler;
         plaintext = 64'h1020_3040_5060_7080 + block_index;
         scramble_block(plaintext, scrambled);
         drive_gearbox_sample(scrambled, block_index[0] ? 2'b01 : 2'b10, 1'b1);
-
         if (descrambled_payload_valid !== 1'b1) $fatal(1, "Descrambler valid missing on block %0d", block_index);
-
         if (descrambled_payload !== plaintext) $fatal(1, "Descrambler mismatch on block %0d: expected %h, received %h", block_index, plaintext, descrambled_payload);
-
         if (header_out !== (block_index[0] ? 2'b01 : 2'b10)) $fatal(1, "Header mismatch on block %0d", block_index);
       end
 
@@ -279,19 +258,15 @@ module tb_pcs_rx_lock_descrambler;
       // reach the lock-loss threshold.
       for (int block_index = 0; block_index < 64; block_index++) begin
         drive_gearbox_sample(64'h0, (block_index < 15) ? 2'b00 : 2'b10, 1'b1);
-
         if (block_lock !== 1'b1) $fatal(1, "Block lock lost below threshold at block %0d", block_index);
-
         if (rx_gearbox_slip !== 1'b0) $fatal(1, "Unexpected gearbox slip below lock-loss threshold");
       end
 
       // The previous window contained 15 illegal headers. This first
-      // illegal header in the new window must be counted independently.
-      // If invalid_count was not cleared at rollover, lock would be lost.
+      // illegal header in the new window must be counted independently
+      // If invalid_count was not cleared at rollover, lock would be lost
       drive_gearbox_sample(64'h0, 2'b00, 1'b1);
-
       if (block_lock !== 1'b1) $fatal(1, "Invalid-header count was not cleared at window rollover");
-
       if (rx_gearbox_slip !== 1'b0) $fatal(1, "Window rollover incorrectly caused a gearbox slip");
 
       $display("PASS: lock retention and monitoring-window rollover");
@@ -307,9 +282,7 @@ module tb_pcs_rx_lock_descrambler;
       // The first 15 illegal headers must not cause lock loss.
       for (int invalid_index = 0; invalid_index < 15; invalid_index++) begin
         drive_gearbox_sample(64'h0, 2'b00, 1'b1);
-
         if (block_lock !== 1'b1) $fatal(1, "Block lock lost before the 16th illegal header");
-
         if (rx_gearbox_slip !== 1'b0) $fatal(1, "Gearbox slip asserted before the 16th illegal header");
       end
 
@@ -317,22 +290,18 @@ module tb_pcs_rx_lock_descrambler;
       drive_gearbox_sample(64'h0, 2'b00, 1'b1);
 
       if (block_lock !== 1'b0) $fatal(1, "Block lock did not clear on the 16th illegal header");
-
       if (rx_gearbox_slip !== 1'b1) $fatal(1, "Gearbox slip was not asserted on lock loss");
 
       // Wait for the new gearbox alignment to propagate.
       for (int wait_cycle = 0; wait_cycle < 32; wait_cycle++) begin
         drive_gearbox_sample(64'h0, 2'b00, 1'b0);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock asserted during post-slip wait");
-
         if (rx_gearbox_slip !== 1'b0) $fatal(1, "Gearbox slip remained asserted for more than one cycle");
       end
 
       // The first 63 legal headers must not reacquire lock.
       for (int header_index = 0; header_index < 63; header_index++) begin
         drive_gearbox_sample(64'h0, 2'b10, 1'b1);
-
         if (block_lock !== 1'b0) $fatal(1, "Block lock reacquired before 64 legal headers");
       end
 
@@ -366,7 +335,6 @@ module tb_pcs_rx_lock_descrambler;
       drive_gearbox_sample(scrambled, 2'b01, 1'b1);
 
       if (descrambled_payload_valid !== 1'b1) $fatal(1, "Descrambler was not active before reset");
-
       if (descrambled_payload !== plaintext) $fatal(1, "Incorrect payload before reset");
 
       // Quiesce the interface and assert synchronous DUT reset.
@@ -379,7 +347,6 @@ module tb_pcs_rx_lock_descrambler;
       #1ps;
 
       if (block_lock !== 1'b0) $fatal(1, "Block lock did not clear during reset");
-
       if (descrambled_payload_valid !== 1'b0) $fatal(1, "Descrambler valid remained asserted during reset");
 
       repeat (3) @(posedge clk);
@@ -399,7 +366,6 @@ module tb_pcs_rx_lock_descrambler;
 
       // The descrambler must synchronize again from scratch.
       tx_lfsr = {2'b10, 56'h1234_5678_9ABC_DE};
-
       plaintext = 64'h1122_3344_5566_7788;
       scramble_block(plaintext, scrambled);
       drive_gearbox_sample(scrambled, 2'b10, 1'b1);
@@ -411,7 +377,6 @@ module tb_pcs_rx_lock_descrambler;
       drive_gearbox_sample(scrambled, 2'b01, 1'b1);
 
       if (descrambled_payload_valid !== 1'b1) $fatal(1, "Descrambler did not resynchronize after reset");
-
       if (descrambled_payload !== plaintext) $fatal(1, "Post-reset payload mismatch: expected %h, received %h", plaintext, descrambled_payload);
 
       $display("PASS: reset while locked");

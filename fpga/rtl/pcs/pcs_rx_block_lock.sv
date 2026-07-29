@@ -1,7 +1,7 @@
 // Monitors 64b/66b sync headers produced by the GTY synchronous gearbox.
-// Requests gearbox slips until the receiver is aligned to valid block boundaries.
+// Requests gearbox slips until the receiver is aligned to valid block boundaries
 // Acquires and maintains block lock
-// Forwards payload and header data only when the gearbox output is valid and locked.
+// Forwards payload and header data only when the gearbox output is valid and locked
 
 module pcs_rx_block_lock (
     input logic clk,  // rx_pcs_clk from gty wrapper
@@ -11,7 +11,6 @@ module pcs_rx_block_lock (
     input logic [5:0] rx_header,  // 2 bit header at position [1:0]
     input logic [1:0] rx_data_valid,  // payload validity this cycle
     input logic [1:0] rx_header_valid,  // header validity this cycle
-    input logic [1:0] rx_start_of_seq,
 
     output logic rx_gearbox_slip,
 
@@ -53,7 +52,8 @@ module pcs_rx_block_lock (
       slip_wait_count <= '0;
       rx_gearbox_slip <= 1'b0;
       block_lock <= 1'b0;
-    end else begin
+    end
+    else begin
       rx_gearbox_slip <= 1'b0;
 
       case (state)
@@ -62,15 +62,17 @@ module pcs_rx_block_lock (
           if (sample_valid) begin
             if (header_legal) begin
               if (acquire_count == ACQUIRE_LAST) begin
-                // 64 consecutive legal headers counted acquire_count <= '0;
+                // 64 consecutive legal headers acquired
                 monitor_count <= '0;
                 invalid_count <= '0;
                 block_lock <= 1'b1;
                 state <= LOCKED;
-              end else begin
+              end
+              else begin
                 acquire_count <= acquire_count + 1'b1;
               end
-            end else begin
+            end
+            else begin
               // header position is not correct
               acquire_count <= '0;
               monitor_count <= '0;
@@ -89,7 +91,8 @@ module pcs_rx_block_lock (
             monitor_count <= '0;
             invalid_count <= '0;
             state <= ACQUIRE;
-          end else begin
+          end
+          else begin
             slip_wait_count <= slip_wait_count + 1'b1;
           end
         end
@@ -105,11 +108,13 @@ module pcs_rx_block_lock (
               invalid_count <= '0;
               rx_gearbox_slip <= 1'b1;
               state <= SLIP_WAIT;
-            end else if (monitor_count == MONITOR_LAST) begin
+            end
+            else if (monitor_count == MONITOR_LAST) begin
               // start new monitoring window
               monitor_count <= '0;
               invalid_count <= '0;
-            end else begin
+            end
+            else begin
               monitor_count <= monitor_count + 1'b1;
               if (!header_legal) begin
                 invalid_count <= invalid_count + 1'b1;
@@ -132,7 +137,7 @@ module pcs_rx_block_lock (
   end
 
   assign block_payload = rx_data;
-  assign block_header  = rx_header[1:0];
-  assign block_valid   = block_lock && sample_valid;
+  assign block_header = rx_header[1:0];
+  assign block_valid = block_lock && sample_valid;
 
 endmodule

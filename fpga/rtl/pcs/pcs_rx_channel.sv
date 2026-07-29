@@ -3,10 +3,9 @@ module pcs_rx_channel (
     input logic rst,
 
     input logic [63:0] rx_data,
-    input logic [ 5:0] rx_header,
-    input logic [ 1:0] rx_data_valid,
-    input logic [ 1:0] rx_header_valid,
-    input logic [ 1:0] rx_start_of_seq,
+    input logic [5:0] rx_header,
+    input logic [1:0] rx_data_valid,
+    input logic [1:0] rx_header_valid,
 
     output logic rx_gearbox_slip,
     output logic block_lock,
@@ -36,7 +35,6 @@ module pcs_rx_channel (
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
-      .rx_start_of_seq(rx_start_of_seq),
       .rx_gearbox_slip(rx_gearbox_slip),
       .block_payload(block_payload),
       .block_header(block_header),

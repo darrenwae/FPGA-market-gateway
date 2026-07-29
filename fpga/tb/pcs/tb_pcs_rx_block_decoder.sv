@@ -132,69 +132,46 @@ module tb_pcs_rx_block_decoder;
 
       // Inter-frame idle block: no frame-byte event.
       present_block(IDLE_BLOCK, SYNC_CTRL, 1'b1);
-
       if (frame_valid !== 1'b0) $fatal(1, "Idle block unexpectedly produced frame data");
-
-      if (bad_block !== 1'b0 || sequence_error !== 1'b0) begin
-        $fatal(1, "Idle error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b block_type=%h normalized_data=%h", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next, dut.block_type, dut.normalized_data);
-      end
+      if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "Idle error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b block_type=%h normalized_data=%h", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next, dut.block_type, dut.normalized_data);
 
       commit_block();
-
       if (dut.inside_frame !== 1'b0) $fatal(1, "Idle block left decoder inside a frame: inside_frame=%b", dut.inside_frame);
 
       // START in lane 0 followed by seven frame bytes.
       present_block(START_0_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b1) $fatal(1, "START_0 did not produce a valid beat");
-
       if (frame_start !== 1'b1 || frame_end !== 1'b0) $fatal(1, "Incorrect START_0 boundary flags");
-
       if (frame_keep !== 8'h7F) $fatal(1, "Incorrect START_0 keep mask: %h", frame_keep);
-
       if (frame_data !== 64'h00A6_A5A4_A3A2_A1A0) $fatal(1, "Incorrect START_0 data: expected %h, received %h", 64'h00A6_A5A4_A3A2_A1A0, frame_data);
-
-      if (bad_block !== 1'b0 || sequence_error !== 1'b0) begin
-        $fatal(1, "START_0 error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b block_type=%h normalized_data=%h", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next, dut.block_type, dut.normalized_data);
-      end
+      if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "START_0 error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b block_type=%h normalized_data=%h", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next, dut.block_type, dut.normalized_data);
 
       commit_block();
 
       // Ordinary data block while inside the frame.
       present_block(DATA_BLOCK, SYNC_DATA, 1'b1);
-
       if (frame_valid !== 1'b1) $fatal(1, "Data block did not produce a valid beat");
-
       if (frame_start !== 1'b0 || frame_end !== 1'b0) $fatal(1, "Data block produced a boundary flag");
-
       if (frame_keep !== 8'hFF) $fatal(1, "Incorrect data-block keep mask: %h", frame_keep);
-
       if (frame_data !== DATA_BLOCK) $fatal(1, "Incorrect data-block output: expected %h, received %h", DATA_BLOCK, frame_data);
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "Data block produced an unexpected error");
 
       commit_block();
 
       // Three final data bytes followed by TERMINATE.
       present_block(TERM_3_BLOCK, SYNC_CTRL, 1'b1);
-
       if (frame_valid !== 1'b1) $fatal(1, "TERM_3 did not produce a valid boundary event");
-
       if (frame_start !== 1'b0 || frame_end !== 1'b1) $fatal(1, "Incorrect TERM_3 boundary flags");
-
       if (frame_keep !== 8'h07) $fatal(1, "Incorrect TERM_3 keep mask: %h", frame_keep);
-
       if (frame_data !== 64'h0000_0000_00D2_D1D0) $fatal(1, "Incorrect TERM_3 data: expected %h, received %h", 64'h0000_0000_00D2_D1D0, frame_data);
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "TERM_3 produced an unexpected error");
 
       commit_block();
 
       // Prove that termination returned the decoder to idle state.
       present_block(IDLE_BLOCK, SYNC_CTRL, 1'b1);
-
       if (frame_valid !== 1'b0) $fatal(1, "Post-frame idle produced frame data");
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "Post-frame idle produced an error");
 
       commit_block();
@@ -213,30 +190,21 @@ module tb_pcs_rx_block_decoder;
       present_block(START_4_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b1) $fatal(1, "START_4 did not produce a valid beat");
-
       if (frame_start !== 1'b1 || frame_end !== 1'b0) $fatal(1, "Incorrect START_4 boundary flags: start=%b end=%b", frame_start, frame_end);
-
       if (frame_keep !== 8'h07) $fatal(1, "Incorrect START_4 keep mask: expected 07, received %h", frame_keep);
-
       if (frame_data !== 64'h0000_0000_00C2_C1C0) $fatal(1, "Incorrect START_4 data: expected %h, received %h", 64'h0000_0000_00C2_C1C0, frame_data);
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "START_4 error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next);
 
       commit_block();
-
       if (dut.inside_frame !== 1'b1) $fatal(1, "START_4 did not enter frame state");
 
       // TERM_0 carries no final frame bytes.
       present_block(TERM_0_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b1) $fatal(1, "TERM_0 did not produce a boundary event");
-
       if (frame_start !== 1'b0 || frame_end !== 1'b1) $fatal(1, "Incorrect TERM_0 boundary flags: start=%b end=%b", frame_start, frame_end);
-
       if (frame_keep !== 8'h00) $fatal(1, "Incorrect TERM_0 keep mask: expected 00, received %h", frame_keep);
-
       if (frame_data !== 64'h0) $fatal(1, "TERM_0 unexpectedly produced frame data: %h", frame_data);
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "TERM_0 error: bad_block=%b sequence_error=%b inside_frame=%b inside_frame_next=%b", bad_block, sequence_error, dut.inside_frame, dut.inside_frame_next);
 
       commit_block();
@@ -257,15 +225,11 @@ module tb_pcs_rx_block_decoder;
       present_block(DATA_BLOCK, SYNC_DATA, 1'b1);
 
       if (frame_valid !== 1'b0) $fatal(1, "Stray data block unexpectedly produced frame data");
-
       if (bad_block !== 1'b0) $fatal(1, "Stray data block was incorrectly marked malformed");
-
       if (sequence_error !== 1'b1) $fatal(1, "Stray data block did not assert sequence_error");
-
       if (dut.inside_frame_next !== 1'b0) $fatal(1, "Stray data block changed frame state");
 
       commit_block();
-
       if (dut.inside_frame !== 1'b0) $fatal(1, "Decoder entered frame state after stray data");
 
       $display("PASS: data outside frame");
@@ -281,11 +245,8 @@ module tb_pcs_rx_block_decoder;
       present_block(TERM_3_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b0) $fatal(1, "Stray TERM unexpectedly produced a frame event");
-
       if (bad_block !== 1'b0) $fatal(1, "Stray TERM was incorrectly marked malformed");
-
       if (sequence_error !== 1'b1) $fatal(1, "Stray TERM did not assert sequence_error");
-
       if (dut.inside_frame_next !== 1'b0) $fatal(1, "Stray TERM changed frame state");
 
       commit_block();
@@ -306,7 +267,6 @@ module tb_pcs_rx_block_decoder;
       present_block(START_0_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b1 || frame_start !== 1'b1) $fatal(1, "Initial START_0 did not begin a frame");
-
       if (frame_abort !== 1'b0) $fatal(1, "Initial START_0 incorrectly asserted frame_abort");
 
       commit_block();
@@ -318,19 +278,12 @@ module tb_pcs_rx_block_decoder;
       present_block(START_4_BLOCK, SYNC_CTRL, 1'b1);
 
       if (sequence_error !== 1'b1) $fatal(1, "Repeated START did not assert sequence_error");
-
       if (bad_block !== 1'b0) $fatal(1, "Repeated START was incorrectly marked malformed");
-
       if (frame_abort !== 1'b1) $fatal(1, "Repeated START did not abort the active frame");
-
       if (frame_valid !== 1'b0) $fatal(1, "Repeated START emitted frame data during abort");
-
       if (frame_start !== 1'b0 || frame_end !== 1'b0) $fatal(1, "Repeated START emitted boundary flags during abort");
-
       if (frame_keep !== 8'h00) $fatal(1, "Repeated START emitted a keep mask during abort");
-
       if (dut.inside_frame_next !== 1'b0) $fatal(1, "Repeated START did not leave the frame state");
-
       commit_block();
 
       if (dut.inside_frame !== 1'b0) $fatal(1, "Decoder remained inside frame after repeated START");
@@ -348,11 +301,8 @@ module tb_pcs_rx_block_decoder;
       present_block(MALFORMED_CTRL_BLOCK, SYNC_CTRL, 1'b1);
 
       if (frame_valid !== 1'b0) $fatal(1, "Malformed control block produced frame data");
-
       if (bad_block !== 1'b1) $fatal(1, "Malformed control block did not assert bad_block");
-
       if (sequence_error !== 1'b0) $fatal(1, "Malformed control block incorrectly asserted sequence_error");
-
       if (dut.inside_frame_next !== 1'b0) $fatal(1, "Malformed control block changed frame state");
 
       commit_block();
@@ -372,11 +322,8 @@ module tb_pcs_rx_block_decoder;
       present_block(DATA_BLOCK, 2'b00, 1'b1);
 
       if (frame_valid !== 1'b0) $fatal(1, "Illegal sync header produced frame data");
-
       if (bad_block !== 1'b1) $fatal(1, "Illegal sync header did not assert bad_block");
-
       if (sequence_error !== 1'b0) $fatal(1, "Illegal sync header incorrectly asserted sequence_error");
-
       if (dut.inside_frame_next !== 1'b0) $fatal(1, "Illegal sync header changed frame state");
 
       commit_block();
@@ -406,13 +353,9 @@ module tb_pcs_rx_block_decoder;
       present_block(64'hFFFF_FFFF_FFFF_FFFF, 2'b00, 1'b0);
 
       if (frame_valid !== 1'b0) $fatal(1, "Invalid cycle produced a frame event");
-
       if (frame_start !== 1'b0 || frame_end !== 1'b0) $fatal(1, "Invalid cycle produced a boundary flag");
-
       if (frame_keep !== 8'h00) $fatal(1, "Invalid cycle produced a keep mask");
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "Invalid cycle produced an error");
-
       if (dut.inside_frame_next !== 1'b1) $fatal(1, "Invalid cycle changed frame state");
 
       commit_block();
@@ -423,7 +366,6 @@ module tb_pcs_rx_block_decoder;
       present_block(DATA_BLOCK, SYNC_DATA, 1'b1);
 
       if (frame_valid !== 1'b1 || frame_keep !== 8'hFF) $fatal(1, "Decoder did not resume after invalid cycle");
-
       if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "Post-bubble data produced an error");
 
       commit_block();
@@ -449,7 +391,6 @@ module tb_pcs_rx_block_decoder;
         if (frame_valid !== 1'b1 || frame_start !== 1'b1) $fatal(1, "TERM_%0d setup START failed", byte_count);
 
         commit_block();
-
         normalized_term = '0;
         normalized_term[7:0] = term_block_type(byte_count);
 
@@ -464,13 +405,9 @@ module tb_pcs_rx_block_decoder;
         present_block(normalized_term, SYNC_CTRL, 1'b1);
 
         if (frame_valid !== 1'b1) $fatal(1, "TERM_%0d did not produce a boundary event", byte_count);
-
         if (frame_start !== 1'b0 || frame_end !== 1'b1) $fatal(1, "TERM_%0d produced incorrect boundary flags", byte_count);
-
         if (frame_keep !== expected_keep) $fatal(1, "TERM_%0d keep mismatch: expected %h, received %h", byte_count, expected_keep, frame_keep);
-
         if (frame_data !== expected_data) $fatal(1, "TERM_%0d data mismatch: expected %h, received %h", byte_count, expected_data, frame_data);
-
         if (bad_block !== 1'b0 || sequence_error !== 1'b0) $fatal(1, "TERM_%0d produced an error: bad=%b sequence=%b", byte_count, bad_block, sequence_error);
 
         commit_block();

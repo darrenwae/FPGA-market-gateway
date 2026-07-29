@@ -34,7 +34,6 @@ module eth_rx_channel (
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
-      .rx_start_of_seq(rx_start_of_seq),
       .rx_gearbox_slip(rx_gearbox_slip),
       .block_lock(block_lock),
       .frame_data(frame_data),

@@ -22,17 +22,13 @@ module pcs_rx_descrambler (
 
   always_ff @(posedge clk) begin
     if (rst) begin
-      rx_lfsr <= '0;
       sync_pending <= 1'b1;
-      descrambled_payload <= '0;
-      header_out <= '0;
       descrambled_payload_valid <= 1'b0;
     end
     else begin
       descrambled_payload_valid <= 1'b0;
       if (!block_lock) begin
         // alignment lost, have to re-sync
-        rx_lfsr <= '0;
         sync_pending <= 1'b1;
       end
       else if (block_valid) begin
@@ -53,7 +49,7 @@ module pcs_rx_descrambler (
 
   always_comb begin
     for (int j = 0; j < 64; j++) begin
-      descrambled_payload_next[j] = block_payload[j] ^ ((j <= 24) ? block_payload[j + 39] : rx_lfsr[j - 25]) ^ ((j <= 5) ? block_payload[j + 58] : rx_lfsr[j - 6]);
+      descrambled_payload_next[j] = block_payload[j] ^ ((j <= 24) ? block_payload[j+39] : rx_lfsr[j-25]) ^ ((j <= 5) ? block_payload[j+58] : rx_lfsr[j-6]);
     end
   end
 
