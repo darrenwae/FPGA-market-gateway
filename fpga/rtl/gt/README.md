@@ -132,7 +132,6 @@ The following outputs are provided for each of the two channels:
 | `rx_header` | Sync-header output from the GT gearbox. |
 | `rx_data_valid` | Indicates valid RX payload output. |
 | `rx_header_valid` | Indicates valid RX header output. |
-| `rx_start_of_seq` | GT gearbox sequence position. |
 
 The PCS returns `rx_gearbox_slip` to request a different gearbox alignment.
 

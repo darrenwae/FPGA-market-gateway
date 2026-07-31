@@ -40,7 +40,6 @@ module xem8320_top (
   logic [1:0][5:0] rx_header;
   logic [1:0][1:0] rx_data_valid;
   logic [1:0][1:0] rx_header_valid;
-  logic [1:0][1:0] rx_start_of_seq;
   logic [1:0] rx_gearbox_slip;
 
 
@@ -108,32 +107,10 @@ module xem8320_top (
   logic rx0_integrity_failure;
 
   logic rx0_message_is_reset_all;
-
-  (* MARK_DEBUG = "TRUE" *)
   logic rx0_sequence_mismatch_event;
-
-  (* MARK_DEBUG = "TRUE" *)
   logic rx0_stream_fault;
-
-  (* MARK_DEBUG = "TRUE" *)
   logic rx0_effective_stream_fault;
-
-  (* MARK_DEBUG = "TRUE" *)
   logic [31:0] rx0_verified_next_sequence_number;
-
-
-  // Temporary integration observability
-  (* MARK_DEBUG = "TRUE" *)
-  logic [239:0] rx0_last_decoded_fields;
-
-  (* MARK_DEBUG = "TRUE" *)
-  logic [31:0] rx0_decoded_count;
-
-  (* MARK_DEBUG = "TRUE" *)
-  logic [31:0] rx0_error_count;
-
-  (* MARK_DEBUG = "TRUE" *)
-  logic [11:0] rx0_last_event_flags;
 
 
   assign rx0_message_is_reset_all = rx0_decoded_valid && (rx0_decoded_message_type == CONFIG_CONTROL_MESSAGE) && (rx0_decoded_payload_0 == CONFIG_RESET_ALL);
@@ -173,7 +150,6 @@ module xem8320_top (
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
-      .rx_start_of_seq(rx_start_of_seq),
       .tx_pcs_clk(tx_pcs_clk),
       .rx_pcs_clk(rx_pcs_clk),
       .tx_reset_done(tx_reset_done),
@@ -197,15 +173,13 @@ module xem8320_top (
   assign rx_pcs_rst = rx_pcs_reset_sync[1];
 
   // Channel 0 is the host-to-FPGA application receive path.
-  (*DONT_TOUCH = "yes"*)
   eth_rx_channel u_eth_rx_channel (
       .clk(rx_pcs_clk),
       .rst(rx_pcs_rst),
       .rx_data(rx_data[0]),
-      .rx_header(rx_header[0]),
-      .rx_data_valid(rx_data_valid[0]),
-      .rx_header_valid(rx_header_valid[0]),
-      .rx_start_of_seq(rx_start_of_seq[0]),
+      .rx_header(rx_header[0][1:0]),
+      .rx_data_valid(rx_data_valid[0][0]),
+      .rx_header_valid(rx_header_valid[0][0]),
       .rx_gearbox_slip(rx_gearbox_slip[0]),
       .block_lock(rx0_block_lock),
       .frame_data(rx0_frame_data),
@@ -311,29 +285,6 @@ module xem8320_top (
       .integrity_failure(rx0_integrity_failure)
   );
 
-  // temporary consumer
-  always_ff @(posedge rx_pcs_clk) begin
-    if (rx_pcs_rst) begin
-      rx0_last_decoded_fields <= '0;
-      rx0_decoded_count <= '0;
-      rx0_error_count <= '0;
-      rx0_last_event_flags <= '0;
-    end
-    else begin
-      if (rx0_decoded_valid) begin
-        rx0_last_decoded_fields <= {rx0_decoded_payload_3, rx0_decoded_payload_2, rx0_decoded_payload_1, rx0_decoded_payload_0, rx0_decoded_timestamp, rx0_decoded_symbol_id, rx0_decoded_sequence_number, rx0_decoded_flags, rx0_decoded_message_type};
-        rx0_decoded_count <= rx0_decoded_count + 1'b1;
-      end
-
-      if (rx0_parser_error || rx0_protocol_error || rx0_integrity_failure || rx0_sequence_mismatch_event) begin
-        rx0_error_count <= rx0_error_count + 1'b1;
-      end
-
-      if (rx0_packet_commit || rx0_packet_discard || rx0_integrity_result_valid || rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_parser_error) begin
-        rx0_last_event_flags <= {rx0_parser_error, rx0_protocol_error, rx0_integrity_failure, rx0_integrity_result_valid, rx0_integrity_ok, rx0_integrity_known, rx0_packet_discard, rx0_packet_commit, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
-      end
-    end
-  end
 
   // Channel 1 RX is not used by the v0 application.
   assign rx_gearbox_slip[1] = 1'b0;

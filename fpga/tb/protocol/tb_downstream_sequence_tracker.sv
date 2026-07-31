@@ -171,6 +171,8 @@ module tb_downstream_sequence_tracker;
       message_valid = 1'b0;
       message_packet_start = 1'b0;
       message_packet_end = 1'b0;
+
+      #1ps;
       check_outputs(32'd1, 1'b0, 1'b0, 1'b0, "before packet commit");
       packet_commit = 1'b1;
 

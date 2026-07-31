@@ -2,9 +2,7 @@
 
 module tb_internal_message_assembler;
 
-  // ---------------------------------------------------------------------------
-  // DUT interface
-  // ---------------------------------------------------------------------------
+  localparam realtime CLK_PERIOD_NS = 6.20606;
 
   logic clk;
   logic rst;
@@ -23,17 +21,10 @@ module tb_internal_message_assembler;
 
   int unsigned error_count;
 
-  // ---------------------------------------------------------------------------
-  // Clock
-  // ---------------------------------------------------------------------------
 
-  localparam realtime CLK_PERIOD_NS = 6.20606;
   initial clk = 1'b0;
   always #(CLK_PERIOD_NS / 2.0) clk = ~clk;
 
-  // ---------------------------------------------------------------------------
-  // DUT
-  // ---------------------------------------------------------------------------
 
   internal_message_assembler dut (
       .clk(clk),
@@ -51,18 +42,17 @@ module tb_internal_message_assembler;
   );
 
 
-  // ---------------------------------------------------------------------------
-  // Low-level driver
-  // ---------------------------------------------------------------------------
-
   task automatic drive_idle;
     begin
       @(negedge clk);
+
       udp_payload_data = '0;
       udp_payload_start = 1'b0;
       udp_payload_end = 1'b0;
       udp_payload_valid = 1'b0;
       udp_packet_abort = 1'b0;
+
+      #1ps;
     end
   endtask
 
@@ -70,11 +60,14 @@ module tb_internal_message_assembler;
   task automatic drive_word(input logic [63:0] data, input logic start, input logic last);
     begin
       @(negedge clk);
+
       udp_payload_data = data;
       udp_payload_start = start;
       udp_payload_end = last;
       udp_payload_valid = 1'b1;
       udp_packet_abort = 1'b0;
+
+      #1ps;
     end
   endtask
 
@@ -82,17 +75,22 @@ module tb_internal_message_assembler;
   task automatic drive_abort;
     begin
       @(negedge clk);
+
       udp_payload_data = '0;
       udp_payload_start = 1'b0;
       udp_payload_end = 1'b0;
       udp_payload_valid = 1'b0;
       udp_packet_abort = 1'b1;
+
+      #1ps;
     end
   endtask
+
 
   task automatic reset_dut;
     begin
       rst = 1'b1;
+
       udp_payload_data = '0;
       udp_payload_start = 1'b0;
       udp_payload_end = 1'b0;
@@ -103,12 +101,10 @@ module tb_internal_message_assembler;
 
       @(negedge clk);
       rst = 1'b0;
+
+      #1ps;
     end
   endtask
-
-  // ---------------------------------------------------------------------------
-  // Output checker
-  // ---------------------------------------------------------------------------
 
 
   task automatic check_condition(input logic condition, input string failure_message);
@@ -120,9 +116,26 @@ module tb_internal_message_assembler;
     end
   endtask
 
-  // ---------------------------------------------------------------------------
-  // Test cases
-  // ---------------------------------------------------------------------------
+
+  task automatic check_message(input logic [255:0] expected_data, input logic expected_start, input logic expected_end, input string label);
+    begin
+      check_condition(message_valid === 1'b1, $sformatf("%s: expected message_valid", label));
+      check_condition(message_data === expected_data, $sformatf("%s: message_data is incorrect", label));
+      check_condition(message_packet_start === expected_start, $sformatf("%s: message_packet_start is incorrect", label));
+      check_condition(message_packet_end === expected_end, $sformatf("%s: message_packet_end is incorrect", label));
+      check_condition(message_packet_abort === 1'b0, $sformatf("%s: unexpected message_packet_abort", label));
+    end
+  endtask
+
+
+  task automatic check_no_message(input string label);
+    begin
+      check_condition(message_valid === 1'b0, $sformatf("%s: unexpected message_valid", label));
+      check_condition(message_packet_start === 1'b0, $sformatf("%s: unexpected message_packet_start", label));
+      check_condition(message_packet_end === 1'b0, $sformatf("%s: unexpected message_packet_end", label));
+    end
+  endtask
+
 
   task automatic test_single_message_packet;
     localparam logic [63:0] WORD_0 = 64'h0706_0504_0302_0100;
@@ -134,8 +147,10 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: single-message packet");
+
       reset_dut();
       error_count = 0;
+
       expected_message = {WORD_3, WORD_2, WORD_1, WORD_0};
 
       drive_word(WORD_0, 1'b1, 1'b0);
@@ -143,29 +158,17 @@ module tb_internal_message_assembler;
       drive_word(WORD_2, 1'b0, 1'b0);
       drive_word(WORD_3, 1'b0, 1'b1);
 
-      // Deassert inputs after the DUT samples word 3.
-      drive_idle();
-
-      check_condition(message_valid === 1'b1, "Expected message_valid");
-      check_condition(message_data === expected_message, "Assembled message_data is incorrect");
-      check_condition(message_packet_start === 1'b1, "Expected message_packet_start");
-      check_condition(message_packet_end === 1'b1, "Expected message_packet_end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected message_packet_abort");
+      check_message(expected_message, 1'b1, 1'b1, "single message");
 
       drive_idle();
+      check_no_message("after single message");
 
-      check_condition(message_valid === 1'b0, "message_valid must be a one-cycle pulse");
-      check_condition(message_packet_start === 1'b0, "message_packet_start must be a one-cycle pulse");
-      check_condition(message_packet_end === 1'b0, "message_packet_end must be a one-cycle pulse");
+      if (error_count == 0) $display("PASS: single-message packet");
+      else $fatal(1, "FAIL: single-message packet, %0d errors", error_count);
 
-      if (error_count == 0) begin
-        $display("PASS: single-message packet");
-      end
-      else begin
-        $fatal(1, "FAIL: single-message packet, %0d errors", error_count);
-      end
     end
   endtask
+
 
   task automatic test_two_messages_one_packet;
     localparam logic [63:0] A0 = 64'h0706_0504_0302_0100;
@@ -183,8 +186,8 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: two messages in one packet");
-      reset_dut();
 
+      reset_dut();
       error_count = 0;
 
       expected_a = {A3, A2, A1, A0};
@@ -195,41 +198,30 @@ module tb_internal_message_assembler;
       drive_word(A2, 1'b0, 1'b0);
       drive_word(A3, 1'b0, 1'b0);
 
-      // Apply B0 after A3 has been sampled.
-      // The output from message A is visible here.
+      check_message(expected_a, 1'b1, 1'b0, "message A");
+
       drive_word(B0, 1'b0, 1'b0);
-      check_condition(message_valid === 1'b1, "Expected message_valid for message A");
-      check_condition(message_data === expected_a, "Message A data is incorrect");
-      check_condition(message_packet_start === 1'b1, "Message A should be the packet start");
-      check_condition(message_packet_end === 1'b0, "Message A should not be the packet end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected abort while emitting message A");
+      check_no_message("message B word 0");
 
       drive_word(B1, 1'b0, 1'b0);
-      check_condition(message_valid === 1'b0, "message_valid should deassert between messages");
+      check_no_message("message B word 1");
 
       drive_word(B2, 1'b0, 1'b0);
+      check_no_message("message B word 2");
+
       drive_word(B3, 1'b0, 1'b1);
 
-      drive_idle();
-
-      check_condition(message_valid === 1'b1, "Expected message_valid for message B");
-      check_condition(message_data === expected_b, "Message B data is incorrect");
-      check_condition(message_packet_start === 1'b0, "Message B should not be the packet start");
-      check_condition(message_packet_end === 1'b1, "Message B should be the packet end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected abort while emitting message B");
+      check_message(expected_b, 1'b0, 1'b1, "message B");
 
       drive_idle();
+      check_no_message("after message B");
 
-      check_condition(message_valid === 1'b0, "message_valid must be a one-cycle pulse");
+      if (error_count == 0) $display("PASS: two messages in one packet");
+      else $fatal(1, "FAIL: two messages in one packet, %0d errors", error_count);
 
-      if (error_count == 0) begin
-        $display("PASS: two messages in one packet");
-      end
-      else begin
-        $fatal(1, "FAIL: two messages in one packet, %0d errors", error_count);
-      end
     end
   endtask
+
 
   task automatic test_back_to_back_packets;
     localparam logic [63:0] A0 = 64'h0706_0504_0302_0100;
@@ -247,51 +239,38 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: back-to-back packets");
-      reset_dut();
 
+      reset_dut();
       error_count = 0;
 
       expected_a = {A3, A2, A1, A0};
       expected_b = {B3, B2, B1, B0};
 
-      // Packet A
       drive_word(A0, 1'b1, 1'b0);
       drive_word(A1, 1'b0, 1'b0);
       drive_word(A2, 1'b0, 1'b0);
       drive_word(A3, 1'b0, 1'b1);
 
-      // Packet B starts on the immediately following cycle.
-      drive_word(B0, 1'b1, 1'b0);
+      check_message(expected_a, 1'b1, 1'b1, "packet A");
 
-      check_condition(message_valid === 1'b1, "Expected message_valid for packet A");
-      check_condition(message_data === expected_a, "Packet A message data is incorrect");
-      check_condition(message_packet_start === 1'b1, "Packet A should assert message_packet_start");
-      check_condition(message_packet_end === 1'b1, "Packet A should assert message_packet_end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected abort between back-to-back packets");
+      drive_word(B0, 1'b1, 1'b0);
+      check_no_message("packet B word 0");
 
       drive_word(B1, 1'b0, 1'b0);
       drive_word(B2, 1'b0, 1'b0);
       drive_word(B3, 1'b0, 1'b1);
 
-      drive_idle();
-
-      check_condition(message_valid === 1'b1, "Expected message_valid for packet B");
-      check_condition(message_data === expected_b, "Packet B message data is incorrect");
-      check_condition(message_packet_start === 1'b1, "Packet B should assert message_packet_start");
-      check_condition(message_packet_end === 1'b1, "Packet B should assert message_packet_end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected packet abort for packet B");
+      check_message(expected_b, 1'b1, 1'b1, "packet B");
 
       drive_idle();
-      check_condition(message_valid === 1'b0, "message_valid must be a one-cycle pulse");
+      check_no_message("after packet B");
 
-      if (error_count == 0) begin
-        $display("PASS: back-to-back packets");
-      end
-      else begin
-        $fatal(1, "FAIL: back-to-back packets, %0d errors", error_count);
-      end
+      if (error_count == 0) $display("PASS: back-to-back packets");
+      else $fatal(1, "FAIL: back-to-back packets, %0d errors", error_count);
+
     end
   endtask
+
 
   task automatic test_idle_gaps_between_words;
     localparam logic [63:0] W0 = 64'h0706_0504_0302_0100;
@@ -303,47 +282,45 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: idle gaps between words");
-      reset_dut();
 
+      reset_dut();
       error_count = 0;
+
       expected_message = {W3, W2, W1, W0};
 
       drive_word(W0, 1'b1, 1'b0);
-      drive_idle();
-      check_condition(message_valid === 1'b0, "Unexpected message_valid after word 0");
+      check_no_message("word 0");
 
       drive_idle();
-      check_condition(message_valid === 1'b0, "Unexpected message_valid during idle gap");
+      check_no_message("first idle gap");
+
+      drive_idle();
+      check_no_message("second idle gap");
 
       drive_word(W1, 1'b0, 1'b0);
+      check_no_message("word 1");
+
       drive_idle();
-      check_condition(message_valid === 1'b0, "Unexpected message_valid after word 1");
+      check_no_message("idle after word 1");
 
       drive_word(W2, 1'b0, 1'b0);
-      drive_idle();
-      check_condition(message_valid === 1'b0, "Unexpected message_valid after word 2");
+      check_no_message("word 2");
 
       drive_idle();
+      check_no_message("idle after word 2");
+
       drive_word(W3, 1'b0, 1'b1);
-      drive_idle();
-
-      check_condition(message_valid === 1'b1, "Expected message_valid after word 3");
-      check_condition(message_data === expected_message, "Message data is incorrect after idle gaps");
-      check_condition(message_packet_start === 1'b1, "Expected message_packet_start");
-      check_condition(message_packet_end === 1'b1, "Expected message_packet_end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected message_packet_abort");
+      check_message(expected_message, 1'b1, 1'b1, "message after idle gaps");
 
       drive_idle();
-      check_condition(message_valid === 1'b0, "message_valid must be a one-cycle pulse");
+      check_no_message("after idle-gap message");
 
-      if (error_count == 0) begin
-        $display("PASS: idle gaps between words");
-      end
-      else begin
-        $fatal(1, "FAIL: idle gaps between words, %0d errors", error_count);
-      end
+      if (error_count == 0) $display("PASS: idle gaps between words");
+      else $fatal(1, "FAIL: idle gaps between words, %0d errors", error_count);
+
     end
   endtask
+
 
   task automatic test_abort_during_partial_message;
     localparam logic [63:0] W0 = 64'h0706_0504_0302_0100;
@@ -351,34 +328,35 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: abort during partial message");
+
       reset_dut();
       error_count = 0;
 
       drive_word(W0, 1'b1, 1'b0);
       drive_word(W1, 1'b0, 1'b0);
-      check_condition(message_valid === 1'b0, "Partial message must not be emitted");
-      drive_abort();
-      drive_idle();
-      check_condition(message_valid === 1'b0, "Abort must not emit a message");
-      check_condition(message_packet_abort === 1'b1, "Expected message_packet_abort");
-      drive_idle();
-      check_condition(message_packet_abort === 1'b0, "message_packet_abort must be a one-cycle pulse");
-      check_condition(message_valid === 1'b0, "Discarded partial message appeared after abort");
+      check_no_message("partial message before abort");
 
-      if (error_count == 0) begin
-        $display("PASS: abort during partial message");
-      end
-      else begin
-        $fatal(1, "FAIL: abort during partial message, %0d errors", error_count);
-      end
+      drive_abort();
+      check_condition(message_packet_abort === 1'b1, "Expected message_packet_abort");
+      check_condition(message_valid === 1'b0, "Abort must not emit a message");
+
+      drive_idle();
+      check_condition(message_packet_abort === 1'b0, "message_packet_abort must clear");
+      check_no_message("after partial-message abort");
+
+      if (error_count == 0) $display("PASS: abort during partial message");
+      else $fatal(1, "FAIL: abort during partial message, %0d errors", error_count);
+
     end
   endtask
+
 
   task automatic test_abort_after_complete_message;
     localparam logic [63:0] A0 = 64'h0706_0504_0302_0100;
     localparam logic [63:0] A1 = 64'h0F0E_0D0C_0B0A_0908;
     localparam logic [63:0] A2 = 64'h1716_1514_1312_1110;
     localparam logic [63:0] A3 = 64'h1F1E_1D1C_1B1A_1918;
+
     localparam logic [63:0] B0 = 64'hA7A6_A5A4_A3A2_A1A0;
     localparam logic [63:0] B1 = 64'hAFAE_ADAC_ABAA_A9A8;
 
@@ -386,48 +364,37 @@ module tb_internal_message_assembler;
 
     begin
       $display("TEST: abort after one complete message");
-      reset_dut();
 
+      reset_dut();
       error_count = 0;
+
       expected_a = {A3, A2, A1, A0};
 
-      // Complete message A, but keep the UDP packet open.
       drive_word(A0, 1'b1, 1'b0);
       drive_word(A1, 1'b0, 1'b0);
       drive_word(A2, 1'b0, 1'b0);
       drive_word(A3, 1'b0, 1'b0);
 
-      // Begin message B. Message A output is visible now.
+      check_message(expected_a, 1'b1, 1'b0, "message A before abort");
+
       drive_word(B0, 1'b0, 1'b0);
-      check_condition(message_valid === 1'b1, "Expected message A to be emitted");
-      check_condition(message_data === expected_a, "Message A data is incorrect");
-      check_condition(message_packet_start === 1'b1, "Message A should be the packet start");
-      check_condition(message_packet_end === 1'b0, "Message A should not be the packet end");
-      check_condition(message_packet_abort === 1'b0, "Unexpected abort while emitting message A");
-
       drive_word(B1, 1'b0, 1'b0);
-      check_condition(message_valid === 1'b0, "Partial message B must not be emitted");
+      check_no_message("partial message B");
+
       drive_abort();
-      drive_idle();
-      check_condition(message_valid === 1'b0, "Abort must not emit partial message B");
       check_condition(message_packet_abort === 1'b1, "Expected message_packet_abort after upstream abort");
+      check_condition(message_valid === 1'b0, "Abort must not emit partial message B");
 
       drive_idle();
-      check_condition(message_packet_abort === 1'b0, "message_packet_abort must be a one-cycle pulse");
-      check_condition(message_valid === 1'b0, "Partial message appeared after abort");
+      check_condition(message_packet_abort === 1'b0, "message_packet_abort must clear");
+      check_no_message("after message B abort");
 
-      if (error_count == 0) begin
-        $display("PASS: abort after one complete message");
-      end
-      else begin
-        $fatal(1, "FAIL: abort after one complete message, %0d errors", error_count);
-      end
+      if (error_count == 0) $display("PASS: abort after one complete message");
+      else $fatal(1, "FAIL: abort after one complete message, %0d errors", error_count);
+
     end
   endtask
 
-  // ---------------------------------------------------------------------------
-  // Test sequence
-  // ---------------------------------------------------------------------------
 
   initial begin
     test_single_message_packet();
@@ -436,6 +403,7 @@ module tb_internal_message_assembler;
     test_idle_gaps_between_words();
     test_abort_during_partial_message();
     test_abort_after_complete_message();
+
     $display("PASS: ALL TESTS PASSED");
     $finish;
   end

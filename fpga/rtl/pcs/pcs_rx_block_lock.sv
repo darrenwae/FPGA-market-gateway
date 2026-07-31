@@ -8,9 +8,9 @@ module pcs_rx_block_lock (
     input logic rst,
 
     input logic [63:0] rx_data,  // 64 bit scarmbled payload
-    input logic [5:0] rx_header,  // 2 bit header at position [1:0]
-    input logic [1:0] rx_data_valid,  // payload validity this cycle
-    input logic [1:0] rx_header_valid,  // header validity this cycle
+    input logic [1:0] rx_header,  // 2 bit header
+    input logic rx_data_valid,  // payload validity this cycle
+    input logic rx_header_valid,  // header validity this cycle
 
     output logic rx_gearbox_slip,
 
@@ -40,7 +40,7 @@ module pcs_rx_block_lock (
   logic sample_valid;
   logic header_legal;
 
-  assign sample_valid = rx_data_valid[0] && rx_header_valid[0];
+  assign sample_valid = rx_data_valid && rx_header_valid;
   assign header_legal = rx_header[0] ^ rx_header[1];  // only 2'b10 or 2'b01 are valid header
 
   always_ff @(posedge clk) begin
@@ -137,7 +137,7 @@ module pcs_rx_block_lock (
   end
 
   assign block_payload = rx_data;
-  assign block_header = rx_header[1:0];
+  assign block_header = rx_header;
   assign block_valid = block_lock && sample_valid;
 
 endmodule

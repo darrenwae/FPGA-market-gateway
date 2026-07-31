@@ -5,10 +5,9 @@ module eth_rx_channel (
     input logic rst,
 
     input logic [63:0] rx_data,
-    input logic [5:0] rx_header,
-    input logic [1:0] rx_data_valid,
-    input logic [1:0] rx_header_valid,
-    input logic [1:0] rx_start_of_seq,
+    input logic [1:0] rx_header,
+    input logic rx_data_valid,
+    input logic rx_header_valid,
 
     output logic rx_gearbox_slip,
     output logic block_lock,

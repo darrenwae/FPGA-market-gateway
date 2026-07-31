@@ -17,10 +17,9 @@ module tb_eth_rx_channel;
   logic rst;
 
   logic [63:0] rx_data;
-  logic [5:0] rx_header;
-  logic [1:0] rx_data_valid;
-  logic [1:0] rx_header_valid;
-  logic [1:0] rx_start_of_seq;
+  logic [1:0] rx_header;
+  logic rx_data_valid;
+  logic rx_header_valid;
 
   logic rx_gearbox_slip;
   logic block_lock;
@@ -49,7 +48,6 @@ module tb_eth_rx_channel;
       .rx_header(rx_header),
       .rx_data_valid(rx_data_valid),
       .rx_header_valid(rx_header_valid),
-      .rx_start_of_seq(rx_start_of_seq),
       .rx_gearbox_slip(rx_gearbox_slip),
       .block_lock(block_lock),
       .frame_data(frame_data),
@@ -88,8 +86,6 @@ module tb_eth_rx_channel;
       rx_header = '0;
       rx_data_valid = '0;
       rx_header_valid = '0;
-      rx_start_of_seq = '0;
-
       tx_lfsr = '0;
     end
   endtask
@@ -102,8 +98,6 @@ module tb_eth_rx_channel;
       rx_header = '0;
       rx_data_valid = '0;
       rx_header_valid = '0;
-      rx_start_of_seq = '0;
-
       rst = 1'b1;
 
       repeat (4) @(posedge clk);
@@ -119,12 +113,10 @@ module tb_eth_rx_channel;
   task automatic drive_gearbox_sample(input logic [63:0] payload, input logic [1:0] header, input logic valid);
     begin
       @(negedge clk);
-
       rx_data = payload;
-      rx_header = {4'b0, header};
-      rx_data_valid = valid ? 2'b01 : 2'b00;
-      rx_header_valid = valid ? 2'b01 : 2'b00;
-      rx_start_of_seq = 2'b00;
+      rx_header = header;
+      rx_data_valid = valid;
+      rx_header_valid = valid;
 
       @(posedge clk);
       #1ps;
