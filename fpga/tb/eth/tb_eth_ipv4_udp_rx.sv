@@ -6,10 +6,6 @@ module tb_eth_ipv4_udp_rx;
   // DUT configuration
   // ---------------------------------------------------------------------------
 
-  localparam logic [47:0] LOCAL_MAC = 48'h02_00_00_00_00_01;
-  localparam logic [31:0] LOCAL_IP = 32'hC0A8_0102;
-  localparam logic [15:0] LOCAL_UDP_PORT = 16'd5000;
-
   localparam int unsigned UDP_PAYLOAD_OFFSET = 49;
   localparam int unsigned FCS_BYTES = 4;
   localparam int unsigned MAX_UDP_PAYLOAD_BYTES = 1472;
@@ -66,11 +62,7 @@ module tb_eth_ipv4_udp_rx;
   // DUT instance
   // ---------------------------------------------------------------------------
 
-  eth_ipv4_udp_rx #(
-      .LOCAL_MAC(LOCAL_MAC),
-      .LOCAL_IP(LOCAL_IP),
-      .LOCAL_UDP_PORT(LOCAL_UDP_PORT)
-  ) dut (
+  eth_ipv4_udp_rx dut (
       .clk(clk),
       .rst(rst),
       .frame_data(frame_data),
@@ -154,7 +146,6 @@ module tb_eth_ipv4_udp_rx;
       error_count = 0;
     end
   endtask
-
 
   // ---------------------------------------------------------------------------
   // Frame construction

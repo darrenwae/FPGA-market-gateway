@@ -15,9 +15,6 @@ module xem8320_top (
     output logic [1:0] sfp_rate_select_1
 );
 
-  localparam logic [47:0] LOCAL_MAC = 48'h02_00_00_00_00_01;
-  localparam logic [31:0] LOCAL_IP = 32'hC0A8_0102;
-  localparam logic [15:0] LOCAL_UDP_PORT = 16'd5000;
 
   localparam logic [7:0] CONFIG_CONTROL_MESSAGE = 8'h05;
   localparam logic [31:0] CONFIG_RESET_ALL = 32'h0000_0001;
@@ -81,7 +78,6 @@ module xem8320_top (
   logic rx0_message_packet_start;
   logic rx0_message_packet_end;
   logic rx0_message_packet_abort;
-  logic rx0_assembler_error;
 
 
   // Internal protocol decoder
@@ -110,7 +106,6 @@ module xem8320_top (
   logic rx0_integrity_result_valid;
   logic rx0_integrity_ok;
   logic rx0_integrity_failure;
-  logic rx0_controller_error;
 
   logic rx0_message_is_reset_all;
 
@@ -138,7 +133,7 @@ module xem8320_top (
   logic [31:0] rx0_error_count;
 
   (* MARK_DEBUG = "TRUE" *)
-  logic [13:0] rx0_last_event_flags;
+  logic [11:0] rx0_last_event_flags;
 
 
   assign rx0_message_is_reset_all = rx0_decoded_valid && (rx0_decoded_message_type == CONFIG_CONTROL_MESSAGE) && (rx0_decoded_payload_0 == CONFIG_RESET_ALL);
@@ -225,11 +220,7 @@ module xem8320_top (
       .fcs_ok(rx0_fcs_ok)
   );
 
-  eth_ipv4_udp_rx #(
-      .LOCAL_MAC(LOCAL_MAC),
-      .LOCAL_IP(LOCAL_IP),
-      .LOCAL_UDP_PORT(LOCAL_UDP_PORT)
-  ) u_eth_ipv4_udp_rx (
+  eth_ipv4_udp_rx u_eth_ipv4_udp_rx (
       .clk(rx_pcs_clk),
       .rst(rx_pcs_rst),
       .frame_data(rx0_frame_data),
@@ -243,7 +234,6 @@ module xem8320_top (
       .udp_payload_end(rx0_udp_payload_end),
       .udp_payload_valid(rx0_udp_payload_valid),
       .udp_packet_abort(rx0_udp_packet_abort),
-
       .parser_error(rx0_parser_error)
   );
 
@@ -259,8 +249,7 @@ module xem8320_top (
       .message_valid(rx0_message_valid),
       .message_packet_start(rx0_message_packet_start),
       .message_packet_end(rx0_message_packet_end),
-      .message_packet_abort(rx0_message_packet_abort),
-      .assembler_error(rx0_assembler_error)
+      .message_packet_abort(rx0_message_packet_abort)
   );
 
   internal_protocol_decoder u_internal_protocol_decoder (
@@ -319,8 +308,7 @@ module xem8320_top (
       .integrity_known(rx0_integrity_known),
       .integrity_result_valid(rx0_integrity_result_valid),
       .integrity_ok(rx0_integrity_ok),
-      .integrity_failure(rx0_integrity_failure),
-      .controller_error(rx0_controller_error)
+      .integrity_failure(rx0_integrity_failure)
   );
 
   // temporary consumer
@@ -337,12 +325,12 @@ module xem8320_top (
         rx0_decoded_count <= rx0_decoded_count + 1'b1;
       end
 
-      if (rx0_parser_error || rx0_assembler_error || rx0_protocol_error || rx0_integrity_failure || rx0_sequence_mismatch_event || rx0_controller_error) begin
+      if (rx0_parser_error || rx0_protocol_error || rx0_integrity_failure || rx0_sequence_mismatch_event) begin
         rx0_error_count <= rx0_error_count + 1'b1;
       end
 
-      if (rx0_packet_commit || rx0_packet_discard || rx0_integrity_result_valid || rx0_controller_error || rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_assembler_error || rx0_parser_error) begin
-        rx0_last_event_flags <= {rx0_parser_error, rx0_assembler_error, rx0_protocol_error, rx0_controller_error, rx0_integrity_failure, rx0_integrity_result_valid, rx0_integrity_ok, rx0_integrity_known, rx0_packet_discard, rx0_packet_commit, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
+      if (rx0_packet_commit || rx0_packet_discard || rx0_integrity_result_valid || rx0_decoded_valid || rx0_decoded_packet_abort || rx0_protocol_error || rx0_parser_error) begin
+        rx0_last_event_flags <= {rx0_parser_error, rx0_protocol_error, rx0_integrity_failure, rx0_integrity_result_valid, rx0_integrity_ok, rx0_integrity_known, rx0_packet_discard, rx0_packet_commit, rx0_decoded_packet_abort, rx0_decoded_valid, rx0_decoded_packet_end, rx0_decoded_packet_start};
       end
     end
   end

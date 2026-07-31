@@ -360,15 +360,6 @@ module tb_internal_protocol_decoder;
       error_count = 0;
       reset_dut();
       check_no_output_pulses("after reset");
-      check_condition(decoded_message_type === 8'h00, "decoded_message_type was not cleared by reset");
-      check_condition(decoded_flags === 8'h00, "decoded_flags was not cleared by reset");
-      check_condition(decoded_sequence_number === 32'h0000_0000, "decoded_sequence_number was not cleared by reset");
-      check_condition(decoded_symbol_id === 16'h0000, "decoded_symbol_id was not cleared by reset");
-      check_condition(decoded_timestamp === 48'h0000_0000_0000, "decoded_timestamp was not cleared by reset");
-      check_condition(decoded_payload_0 === 32'h0000_0000, "decoded_payload_0 was not cleared by reset");
-      check_condition(decoded_payload_1 === 32'h0000_0000, "decoded_payload_1 was not cleared by reset");
-      check_condition(decoded_payload_2 === 32'h0000_0000, "decoded_payload_2 was not cleared by reset");
-      check_condition(decoded_payload_3 === 32'h0000_0000, "decoded_payload_3 was not cleared by reset");
 
       drive_idle();
       check_no_output_pulses("first idle cycle");

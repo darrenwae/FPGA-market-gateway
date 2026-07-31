@@ -54,25 +54,12 @@ module internal_protocol_decoder (
   logic [31:0] payload_3_candidate;
 
   logic message_format_valid;
-
-  logic supported_message_type;
-  logic common_fields_valid;
   logic type_fields_valid;
 
 
   always_ff @(posedge clk) begin
     if (rst) begin
       decoded_valid <= 1'b0;
-      decoded_message_type <= '0;
-      decoded_flags <= '0;
-      decoded_sequence_number <= '0;
-      decoded_symbol_id <= '0;
-      decoded_timestamp <= '0;
-      decoded_payload_0 <= '0;
-      decoded_payload_1 <= '0;
-      decoded_payload_2 <= '0;
-      decoded_payload_3 <= '0;
-
       decoded_packet_start <= 1'b0;
       decoded_packet_end <= 1'b0;
       decoded_packet_abort <= 1'b0;
@@ -85,47 +72,27 @@ module internal_protocol_decoder (
       decoded_packet_abort <= 1'b0;
       protocol_error <= 1'b0;
 
-      // Upstream abort takes priority over message processing.
       if (message_packet_abort) begin
         decoded_packet_abort <= 1'b1;
       end
       else if (message_valid) begin
-        if (message_format_valid) begin
-          decoded_message_type <= message_type_candidate;
-          decoded_flags <= flags_candidate;
-          decoded_sequence_number <= sequence_number_candidate;
-          decoded_symbol_id <= symbol_id_candidate;
-          decoded_timestamp <= timestamp_candidate;
-          decoded_payload_0 <= payload_0_candidate;
-          decoded_payload_1 <= payload_1_candidate;
-          decoded_payload_2 <= payload_2_candidate;
-          decoded_payload_3 <= payload_3_candidate;
+        decoded_message_type <= message_type_candidate;
+        decoded_flags <= flags_candidate;
+        decoded_sequence_number <= sequence_number_candidate;
+        decoded_symbol_id <= symbol_id_candidate;
+        decoded_timestamp <= timestamp_candidate;
+        decoded_payload_0 <= payload_0_candidate;
+        decoded_payload_1 <= payload_1_candidate;
+        decoded_payload_2 <= payload_2_candidate;
+        decoded_payload_3 <= payload_3_candidate;
 
+        if (message_format_valid || (message_type_candidate == ORDER_INTENT)) begin
           decoded_valid <= 1'b1;
           decoded_packet_start <= message_packet_start;
           decoded_packet_end <= message_packet_end;
         end
 
-        else if (message_type_candidate == ORDER_INTENT) begin
-          // Preserve information to generate ORDER_INTENT_PROTOCOL_VIOLATION rejection
-          decoded_message_type <= message_type_candidate;
-          decoded_flags <= flags_candidate;
-          decoded_sequence_number <= sequence_number_candidate;
-          decoded_symbol_id <= symbol_id_candidate;
-          decoded_timestamp <= timestamp_candidate;
-          decoded_payload_0 <= payload_0_candidate;
-          decoded_payload_1 <= payload_1_candidate;
-          decoded_payload_2 <= payload_2_candidate;
-          decoded_payload_3 <= payload_3_candidate;
-
-          decoded_valid <= 1'b1;
-          decoded_packet_start <= message_packet_start;
-          decoded_packet_end <= message_packet_end;
-
-          protocol_error <= 1'b1;
-          decoded_packet_abort <= 1'b1;
-        end
-        else begin
+        if (!message_format_valid) begin
           protocol_error <= 1'b1;
           decoded_packet_abort <= 1'b1;
         end
@@ -135,7 +102,6 @@ module internal_protocol_decoder (
 
 
   always_comb begin
-
     message_type_candidate = message_data[7:0];
     flags_candidate = message_data[15:8];
     reserved_candidate = {message_data[23:16], message_data[31:24]};
@@ -149,16 +115,12 @@ module internal_protocol_decoder (
   end
 
   always_comb begin
-    supported_message_type = 1'b0;
-    type_fields_valid = 1'b0;
     case (message_type_candidate)
       SESSION_STATUS: begin
-        supported_message_type = 1'b1;
         type_fields_valid = (flags_candidate == 8'h0) && (symbol_id_candidate == 16'h0) && (payload_0_candidate <= 32'd6) && (payload_1_candidate == 32'h0) && (payload_2_candidate == 32'h0) && (payload_3_candidate == 32'h0);
       end
 
       TOB_UPDATE: begin
-        supported_message_type = 1'b1;
         type_fields_valid = (flags_candidate[7:2] == 6'b0) && (symbol_id_candidate != 16'h0) &&
 
         // An invalid bid must carry zero bid fields.
@@ -169,17 +131,14 @@ module internal_protocol_decoder (
       end
 
       SYMBOL_STATUS: begin
-        supported_message_type = 1'b1;
         type_fields_valid = (flags_candidate == 8'h0) && (symbol_id_candidate != 16'h0) && (payload_0_candidate <= 32'd4) && (payload_1_candidate == 32'h0) && (payload_2_candidate == 32'h0) && (payload_3_candidate == 32'h0);
       end
 
       ORDER_INTENT: begin
-        supported_message_type = 1'b1;
         type_fields_valid = (flags_candidate == 8'h0) && (symbol_id_candidate != 16'h0) && (payload_0_candidate <= 32'd2) && message_packet_end;
       end
 
       CONFIG_CONTROL: begin
-        supported_message_type = 1'b1;
         type_fields_valid = 1'b0;
 
         if (flags_candidate == 8'h00) begin
@@ -219,12 +178,10 @@ module internal_protocol_decoder (
 
       default: begin
         type_fields_valid = 1'b0;
-        supported_message_type = 1'b0;
       end
     endcase
 
-    common_fields_valid = (reserved_candidate == 16'h0000);
-    message_format_valid = supported_message_type && common_fields_valid && type_fields_valid;
+    message_format_valid = (reserved_candidate == 16'h0000) && type_fields_valid;
   end
 
 

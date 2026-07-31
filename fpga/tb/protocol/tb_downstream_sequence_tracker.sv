@@ -201,7 +201,6 @@ module tb_downstream_sequence_tracker;
 
     $display("TEST: multiple-message packet commit");
     begin
-      $display("TEST: multiple-message packet commit");
 
       apply_reset();
 
@@ -392,6 +391,74 @@ module tb_downstream_sequence_tracker;
       packet_discard = 1'b0;
 
       $display("PASS: sequence mismatch");
+    end
+  endtask
+
+
+  task automatic test_mismatch_after_speculative_progress;
+    /*
+  Purpose:
+  Verify that a mismatch after valid speculative progress faults the stream.
+
+  Input:
+  One packet containing sequence 1, unexpected sequence 3, then sequence 4.
+
+  Expected output:
+  Sequence 3 produces one mismatch event. Later messages are ignored,
+  the packet is discarded, and the verified sequence remains 1.
+  */
+    begin
+      $display("TEST: mismatch after speculative progress");
+
+      apply_reset();
+
+      @(negedge clk);
+      message_valid = 1'b1;
+      message_sequence_number = 32'd1;
+      message_packet_start = 1'b1;
+      message_packet_end = 1'b0;
+      message_is_reset_all = 1'b0;
+
+      @(posedge clk);
+      #1ps;
+
+      @(negedge clk);
+      message_sequence_number = 32'd3;
+      message_packet_start = 1'b0;
+
+      #1ps;
+      check_outputs(32'd1, 1'b1, 1'b0, 1'b1, "later sequence mismatch");
+
+      @(posedge clk);
+      #1ps;
+
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "mismatch registered");
+
+      // A later message in the failed packet must not advance sequence state.
+      @(negedge clk);
+      message_sequence_number = 32'd4;
+      message_packet_end = 1'b1;
+
+      #1ps;
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "later message ignored");
+
+      @(posedge clk);
+      #1ps;
+
+      @(negedge clk);
+      message_valid = 1'b0;
+      message_packet_end = 1'b0;
+      packet_discard = 1'b1;
+
+      @(posedge clk);
+      #1ps;
+
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "failed packet discarded");
+
+      @(negedge clk);
+      packet_discard = 1'b0;
+
+      $display("PASS: mismatch after speculative progress");
     end
   endtask
 
@@ -681,7 +748,6 @@ module tb_downstream_sequence_tracker;
     end
   endtask
 
-
   task automatic test_non_isolated_reset_all;
     /*
     Purpose:
@@ -758,6 +824,7 @@ module tb_downstream_sequence_tracker;
     end
   endtask
 
+
   // ==========================================================================
   // Test selection
   // ==========================================================================
@@ -769,6 +836,7 @@ module tb_downstream_sequence_tracker;
     test_multiple_message_commit();
     test_packet_discard();
     test_sequence_mismatch();
+    test_mismatch_after_speculative_progress();
     test_integrity_failure();
     test_fault_persistence();
     test_reset_all_recovery();

@@ -36,8 +36,6 @@ module tb_rx_packet_controller;
   logic integrity_ok;
   logic integrity_failure;
 
-  logic controller_error;
-
   int unsigned error_count;
 
 
@@ -60,8 +58,7 @@ module tb_rx_packet_controller;
       .integrity_known(integrity_known),
       .integrity_result_valid(integrity_result_valid),
       .integrity_ok(integrity_ok),
-      .integrity_failure(integrity_failure),
-      .controller_error(controller_error)
+      .integrity_failure(integrity_failure)
   );
 
 
@@ -168,7 +165,6 @@ module tb_rx_packet_controller;
       check_condition(packet_discard === 1'b0, $sformatf("%s: unexpected packet_discard", check_label));
       check_condition(integrity_result_valid === 1'b0, $sformatf("%s: unexpected integrity_result_valid", check_label));
       check_condition(integrity_failure === 1'b0, $sformatf("%s: unexpected integrity_failure", check_label));
-      check_condition(controller_error === 1'b0, $sformatf("%s: unexpected controller_error", check_label));
     end
   endtask
 
@@ -239,7 +235,6 @@ module tb_rx_packet_controller;
       drive_events(1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b0);
       check_condition(packet_commit === 1'b1, "packet did not commit after decode completed");
       check_condition(packet_discard === 1'b0, "valid packet was discarded");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       // Commit is a one-cycle pulse.
       drive_idle();
@@ -275,7 +270,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b0, "good FCS unexpectedly asserted integrity_failure");
       check_condition(packet_commit === 1'b1, "packet did not commit when the good FCS arrived");
       check_condition(packet_discard === 1'b0, "valid packet was discarded");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       // Resolution outputs are one-cycle pulses.
       drive_idle();
@@ -305,7 +299,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b0, "same-cycle good FCS asserted integrity_failure");
       check_condition(packet_commit === 1'b1, "same-cycle completion did not commit the packet");
       check_condition(packet_discard === 1'b0, "same-cycle valid packet was discarded");
-      check_condition(controller_error === 1'b0, "same-cycle completion caused a controller error");
 
       // All event outputs are one-cycle pulses.
       drive_idle();
@@ -346,7 +339,6 @@ module tb_rx_packet_controller;
       drive_events(1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b0);
       check_condition(packet_commit === 1'b0, "bad-FCS packet committed after decode");
       check_condition(packet_discard === 1'b1, "bad-FCS packet was not discarded after decode");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       // Discard is a one-cycle pulse.
       drive_idle();
@@ -381,7 +373,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b1, "bad FCS did not assert integrity_failure");
       check_condition(packet_commit === 1'b0, "bad-FCS packet was committed");
       check_condition(packet_discard === 1'b1, "bad-FCS packet was not discarded");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       // Resolution outputs are one-cycle pulses.
       drive_idle();
@@ -409,7 +400,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b1, "frame abort did not assert integrity_failure");
       check_condition(packet_commit === 1'b0, "aborted frame was committed");
       check_condition(packet_discard === 1'b0, "packet was discarded before decoder abort");
-      check_condition(controller_error === 1'b0, "frame abort caused a controller error");
 
       drive_idle();
       check_no_pulses("waiting for decoder abort");
@@ -419,7 +409,6 @@ module tb_rx_packet_controller;
       check_condition(packet_commit === 1'b0, "aborted packet was committed");
       check_condition(packet_discard === 1'b1, "packet was not discarded after decoder abort");
       check_condition(integrity_result_valid === 1'b0, "decoder abort produced a second integrity result");
-      check_condition(controller_error === 1'b0, "decoder abort caused a controller error");
 
       drive_idle();
       check_no_pulses("after frame-abort discard");
@@ -456,7 +445,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b1, "frame abort did not assert integrity_failure");
       check_condition(packet_commit === 1'b0, "aborted packet was committed");
       check_condition(packet_discard === 1'b1, "packet was not discarded after both paths finished");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       drive_idle();
       check_no_pulses("after decode-abort discard");
@@ -494,7 +482,6 @@ module tb_rx_packet_controller;
       check_condition(packet_commit === 1'b0, "decoder-aborted packet was committed");
       check_condition(packet_discard === 1'b1, "decoder-aborted packet was not discarded");
       check_condition(integrity_failure === 1'b0, "logical abort incorrectly reported an integrity failure");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       drive_idle();
       check_no_pulses("after decoder-abort discard");
@@ -530,7 +517,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b0, "good FCS asserted integrity_failure");
       check_condition(packet_commit === 1'b0, "logically failed packet was committed");
       check_condition(packet_discard === 1'b1, "logically failed packet was not discarded");
-      check_condition(controller_error === 1'b0, "unexpected controller error");
 
       drive_idle();
       check_no_pulses("after stored decode-failure discard");
@@ -569,61 +555,6 @@ module tb_rx_packet_controller;
     end
   endtask
 
-  task automatic test_controller_errors;
-    begin
-      $display("TEST: controller errors");
-
-      error_count = 0;
-      reset_dut();
-
-      // Decode completion without an active packet.
-      drive_events(1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b0);
-      check_condition(controller_error === 1'b1, "decode completion without a packet was not rejected");
-      check_condition(packet_commit === 1'b0, "invalid decode completion caused a commit");
-      check_condition(packet_discard === 1'b0, "invalid decode completion caused a discard");
-
-      drive_idle();
-      check_no_pulses("after invalid decode completion");
-
-      // Overlapping packet starts.
-      reset_dut();
-      drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-      check_no_pulses("after first packet start");
-      drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-      check_condition(controller_error === 1'b1, "overlapping packet start was not rejected");
-      check_condition(packet_commit === 1'b0, "overlapping packet start caused a commit");
-      check_condition(packet_discard === 1'b0, "overlapping packet start caused a discard");
-
-      drive_idle();
-      check_condition(controller_error === 1'b0, "overlap error did not clear after one cycle");
-
-      // Duplicate FCS result.
-      reset_dut();
-      drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-      drive_events(1'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b1);
-      check_condition(controller_error === 1'b0, "first FCS result caused a controller error");
-      drive_events(1'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b0);
-      check_condition(controller_error === 1'b1, "duplicate FCS result was not rejected");
-      check_condition(integrity_result_valid === 1'b0, "duplicate FCS was reported as a new integrity result");
-      check_condition(integrity_known === 1'b1, "duplicate FCS cleared the stored integrity result");
-      check_condition(integrity_ok === 1'b1, "duplicate FCS changed the original good result");
-
-      drive_idle();
-      check_condition(controller_error === 1'b0, "duplicate-FCS error did not clear after one cycle");
-
-      // packet_failure_event without an active packet is invalid.
-      reset_dut();
-      drive_events_with_failure(1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0, 1'b1);
-      check_condition(controller_error === 1'b1, "untracked packet_failure_event did not assert controller_error");
-      check_condition(packet_commit === 1'b0, "untracked packet_failure_event caused a commit");
-      check_condition(packet_discard === 1'b0, "untracked packet_failure_event caused a discard");
-      drive_idle();
-
-      check_condition(controller_error === 1'b0, "untracked packet_failure_event error did not clear after one cycle");
-      finish_test("controller errors");
-    end
-  endtask
-
 
   task automatic test_recovery_without_reset;
     begin
@@ -642,7 +573,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b1, "failed packet did not report integrity failure");
       check_condition(packet_commit === 1'b0, "failed packet was committed");
       check_condition(packet_discard === 1'b1, "failed packet was not discarded");
-      check_condition(controller_error === 1'b0, "failed packet caused a controller error");
 
       drive_idle();
       check_no_pulses("after failed-packet discard");
@@ -651,7 +581,6 @@ module tb_rx_packet_controller;
 
       // Start another packet without resetting the controller.
       drive_events(1'b1, 1'b0, 1'b0, 1'b0, 1'b0, 1'b0);
-      ;
       check_no_pulses("after recovery-packet start");
       check_condition(integrity_known === 1'b0, "new packet did not clear the previous integrity result");
       check_condition(integrity_ok === 1'b0, "new packet retained the previous integrity value");
@@ -664,7 +593,6 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b0, "recovery packet reported an integrity failure");
       check_condition(packet_commit === 1'b1, "recovery packet was not committed");
       check_condition(packet_discard === 1'b0, "recovery packet was discarded");
-      check_condition(controller_error === 1'b0, "recovery packet caused a controller error");
 
       drive_idle();
       check_no_pulses("after recovery-packet commit");
@@ -693,7 +621,6 @@ module tb_rx_packet_controller;
       check_condition(packet_discard === 1'b0, "packet discarded before decoding completed");
       check_condition(integrity_result_valid === 1'b0, "logical packet failure incorrectly produced an integrity result");
       check_condition(integrity_failure === 1'b0, "logical packet failure incorrectly asserted integrity_failure");
-      check_condition(controller_error === 1'b0, "tracked packet_failure_event caused a controller error");
 
       // The Ethernet frame itself passes FCS.
       drive_events(1'b0, 1'b0, 1'b0, 1'b0, 1'b1, 1'b1);
@@ -703,14 +630,12 @@ module tb_rx_packet_controller;
       check_condition(integrity_failure === 1'b0, "good FCS incorrectly asserted integrity_failure");
       check_condition(packet_commit === 1'b0, "logically failed packet committed before decoding completed");
       check_condition(packet_discard === 1'b0, "packet discarded before decoding completed");
-      check_condition(controller_error === 1'b0, "good FCS caused a controller error");
 
       // Decode completion resolves the transaction.
       drive_events(1'b0, 1'b1, 1'b0, 1'b0, 1'b0, 1'b0);
       check_condition(packet_commit === 1'b0, "logically failed packet was committed");
       check_condition(packet_discard === 1'b1, "logically failed packet was not discarded");
       check_condition(integrity_failure === 1'b0, "logical packet failure was incorrectly reported as an FCS failure");
-      check_condition(controller_error === 1'b0, "packet resolution caused a controller error");
 
       // Discard is a one-cycle pulse.
       drive_idle();
@@ -739,7 +664,6 @@ module tb_rx_packet_controller;
     test_good_fcs_before_decode_abort();
     test_decode_abort_before_good_fcs();
     test_untracked_fcs_ignored();
-    test_controller_errors();
     test_recovery_without_reset();
     test_packet_failure_waits_for_resolution();
     $display("PASS: ALL TESTS PASSED");

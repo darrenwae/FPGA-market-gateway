@@ -4,12 +4,7 @@ Consumes Ethernet frame bytes from the PCS block decoder, and emits
 only the UDP payload
 */
 
-
-module eth_ipv4_udp_rx #(
-    parameter logic [47:0] LOCAL_MAC = 48'h0,
-    parameter logic [31:0] LOCAL_IP = 32'h0,
-    parameter logic [15:0] LOCAL_UDP_PORT = 16'h0
-) (
+module eth_ipv4_udp_rx (
     input logic clk,
     input logic rst,
 

@@ -1,4 +1,5 @@
-// FCS check may finish before decode
+// Resolves an accepted UDP packet after decoding and frame integrity complete
+// Either result may arrive first
 
 module rx_packet_controller (
     input logic clk,
@@ -19,9 +20,7 @@ module rx_packet_controller (
     output logic integrity_known,  // FCS or physical-abort result is known
     output logic integrity_result_valid,  // new integrity result this cycle
     output logic integrity_ok,  // incoming frame passed FCS
-    output logic integrity_failure,  // bad incoming FCS; later enters STREAM_FAULT
-
-    output logic controller_error  // impossible event ordering or transaction overlap
+    output logic integrity_failure  // bad incoming FCS; later enters STREAM_FAULT
 );
 
   logic packet_pending;  // Packet is awaiting commit or discard
@@ -39,7 +38,6 @@ module rx_packet_controller (
   logic resolve_event;  // Logical and physical processing are complete
   logic commit_event;  // Resolve with no failure
   logic discard_event;  // Report a packet failure
-  logic error_event;  // Invalid controller event ordering
 
 
   assign integrity_known = fcs_seen;
@@ -56,7 +54,6 @@ module rx_packet_controller (
     resolve_event = packet_pending && decode_ready && fcs_ready;
     commit_event = resolve_event && !failure_ready;
     discard_event = resolve_event && failure_ready;
-    error_event = (packet_start && packet_pending) || (decode_complete && !packet_pending) || (packet_failure_event && !packet_pending) || (packet_pending && fcs_seen && (frame_abort || fcs_result_valid));
   end
 
 
@@ -72,14 +69,12 @@ module rx_packet_controller (
       packet_discard <= 1'b0;
       integrity_result_valid <= 1'b0;
       integrity_failure <= 1'b0;
-      controller_error <= 1'b0;
     end
     else begin
       packet_commit <= commit_event;
       packet_discard <= discard_event;
       integrity_result_valid <= fcs_event;
       integrity_failure <= fcs_event && !fcs_event_passed;
-      controller_error <= error_event;
 
       if (packet_start && !packet_pending) begin
         packet_pending <= 1'b1;
