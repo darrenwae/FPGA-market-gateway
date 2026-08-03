@@ -20,15 +20,13 @@ module tb_symbol_state_store;
   localparam logic [15:0] SYMBOL_A = 16'd100;
   localparam logic [15:0] SYMBOL_B = 16'd101;
 
-  // Same lower 14 address bits as SYMBOL_A, but outside the table.
+  // Same lower 14 address bits as SYMBOL_A, but outside the table
   localparam logic [15:0] OUT_OF_RANGE_ALIAS = 16'h4064;
 
   localparam logic [2:0] SYMBOL_TRADING = 3'd4;
 
   localparam logic [31:0] BID_PRICE = 32'd1_000_000;
-  localparam logic [31:0] BID_QUANTITY = 32'd700;
   localparam logic [31:0] ASK_PRICE = 32'd1_000_100;
-  localparam logic [31:0] ASK_QUANTITY = 32'd800;
 
   localparam logic [31:0] MAX_ORDER_QUANTITY = 32'd1_000;
   localparam logic [63:0] MAX_NOTIONAL = 64'h0000_0001_2345_6789;
@@ -43,9 +41,7 @@ module tb_symbol_state_store;
     logic bid_valid;
     logic ask_valid;
     logic [31:0] bid_price;
-    logic [31:0] bid_quantity;
     logic [31:0] ask_price;
-    logic [31:0] ask_quantity;
 
     logic [31:0] max_order_quantity;
     logic [63:0] max_notional;
@@ -58,12 +54,11 @@ module tb_symbol_state_store;
 
   logic message_valid;
   logic [7:0] message_type;
-  logic [7:0] message_flags;
+  logic [1:0] message_flags;
   logic [15:0] message_symbol_id;
   logic [31:0] message_payload_0;
   logic [31:0] message_payload_1;
   logic [31:0] message_payload_2;
-  logic [31:0] message_payload_3;
 
   logic lookup_valid;
   logic lookup_symbol_known;
@@ -73,9 +68,7 @@ module tb_symbol_state_store;
   logic lookup_bid_valid;
   logic lookup_ask_valid;
   logic [31:0] lookup_bid_price;
-  logic [31:0] lookup_bid_quantity;
   logic [31:0] lookup_ask_price;
-  logic [31:0] lookup_ask_quantity;
 
   logic [31:0] lookup_max_order_quantity;
   logic [63:0] lookup_max_notional;
@@ -95,20 +88,14 @@ module tb_symbol_state_store;
       .message_payload_0(message_payload_0),
       .message_payload_1(message_payload_1),
       .message_payload_2(message_payload_2),
-      .message_payload_3(message_payload_3),
-
       .lookup_valid(lookup_valid),
       .lookup_symbol_known(lookup_symbol_known),
       .lookup_symbol_enabled(lookup_symbol_enabled),
       .lookup_symbol_status(lookup_symbol_status),
-
       .lookup_bid_valid(lookup_bid_valid),
       .lookup_ask_valid(lookup_ask_valid),
       .lookup_bid_price(lookup_bid_price),
-      .lookup_bid_quantity(lookup_bid_quantity),
       .lookup_ask_price(lookup_ask_price),
-      .lookup_ask_quantity(lookup_ask_quantity),
-
       .lookup_max_order_quantity(lookup_max_order_quantity),
       .lookup_max_notional(lookup_max_notional),
       .lookup_max_price_band_ticks(lookup_max_price_band_ticks),
@@ -131,7 +118,6 @@ module tb_symbol_state_store;
       message_payload_0 = '0;
       message_payload_1 = '0;
       message_payload_2 = '0;
-      message_payload_3 = '0;
     end
   endtask
 
@@ -145,7 +131,6 @@ module tb_symbol_state_store;
       message_payload_0 = '0;
       message_payload_1 = '0;
       message_payload_2 = '0;
-      message_payload_3 = '0;
     end
   endtask
 
@@ -188,7 +173,7 @@ module tb_symbol_state_store;
   endtask
 
 
-  task automatic send_message(input logic [7:0] current_message_type, input logic [7:0] current_flags, input logic [15:0] current_symbol_id, input logic [31:0] current_payload_0, input logic [31:0] current_payload_1, input logic [31:0] current_payload_2, input logic [31:0] current_payload_3);
+  task automatic send_message(input logic [7:0] current_message_type, input logic [1:0] current_flags, input logic [15:0] current_symbol_id, input logic [31:0] current_payload_0, input logic [31:0] current_payload_1, input logic [31:0] current_payload_2);
     begin
       @(negedge clk);
       message_valid = 1'b1;
@@ -198,7 +183,6 @@ module tb_symbol_state_store;
       message_payload_0 = current_payload_0;
       message_payload_1 = current_payload_1;
       message_payload_2 = current_payload_2;
-      message_payload_3 = current_payload_3;
 
       @(posedge clk);
       #1ps;
@@ -211,28 +195,28 @@ module tb_symbol_state_store;
 
   task automatic send_top_of_book(input logic [15:0] symbol_id);
     begin
-      send_message(TOB_UPDATE, 8'h03, symbol_id, BID_PRICE, BID_QUANTITY, ASK_PRICE, ASK_QUANTITY);
+      send_message(TOB_UPDATE, 2'b11, symbol_id, BID_PRICE, 32'h0, ASK_PRICE);
     end
   endtask
 
 
   task automatic send_symbol_status(input logic [15:0] symbol_id, input logic [2:0] symbol_status);
     begin
-      send_message(SYMBOL_STATUS, 8'h00, symbol_id, {29'd0, symbol_status}, 32'h0, 32'h0, 32'h0);
+      send_message(SYMBOL_STATUS, 2'b00, symbol_id, {29'd0, symbol_status}, 32'h0, 32'h0);
     end
   endtask
 
 
   task automatic send_config(input logic [31:0] config_opcode, input logic [15:0] symbol_id, input logic [31:0] config_value_0, input logic [31:0] config_value_1);
     begin
-      send_message(CONFIG_CONTROL, 8'h00, symbol_id, config_opcode, config_value_0, config_value_1, 32'h0);
+      send_message(CONFIG_CONTROL, 2'b00, symbol_id, config_opcode, config_value_0, config_value_1);
     end
   endtask
 
 
   task automatic send_order_lookup(input logic [15:0] symbol_id);
     begin
-      send_message(ORDER_INTENT, 8'h00, symbol_id, 32'h1, 32'd1, 32'd1, 32'h1);
+      send_message(ORDER_INTENT, 2'b00, symbol_id, 32'h0, 32'h0, 32'h0);
     end
   endtask
 
@@ -272,9 +256,7 @@ module tb_symbol_state_store;
       state.bid_valid = 1'b1;
       state.ask_valid = 1'b1;
       state.bid_price = BID_PRICE;
-      state.bid_quantity = BID_QUANTITY;
       state.ask_price = ASK_PRICE;
-      state.ask_quantity = ASK_QUANTITY;
 
       state.max_order_quantity = MAX_ORDER_QUANTITY;
       state.max_notional = MAX_NOTIONAL;
@@ -296,9 +278,7 @@ module tb_symbol_state_store;
       state.bid_valid = lookup_bid_valid;
       state.ask_valid = lookup_ask_valid;
       state.bid_price = lookup_bid_price;
-      state.bid_quantity = lookup_bid_quantity;
       state.ask_price = lookup_ask_price;
-      state.ask_quantity = lookup_ask_quantity;
 
       state.max_order_quantity = lookup_max_order_quantity;
       state.max_notional = lookup_max_notional;
@@ -320,8 +300,8 @@ module tb_symbol_state_store;
       if (observed_state !== expected_state) begin
         $display("%s expected: known=%b enabled=%b status=%0d", check_label, expected_state.known, expected_state.enabled, expected_state.status);
         $display("%s received: known=%b enabled=%b status=%0d", check_label, observed_state.known, observed_state.enabled, observed_state.status);
-        $display("Expected TOB: bid=%b/%0d/%0d ask=%b/%0d/%0d", expected_state.bid_valid, expected_state.bid_price, expected_state.bid_quantity, expected_state.ask_valid, expected_state.ask_price, expected_state.ask_quantity);
-        $display("Received TOB: bid=%b/%0d/%0d ask=%b/%0d/%0d", observed_state.bid_valid, observed_state.bid_price, observed_state.bid_quantity, observed_state.ask_valid, observed_state.ask_price, observed_state.ask_quantity);
+        $display("Expected TOB: bid=%b/%0d ask=%b/%0d", expected_state.bid_valid, expected_state.bid_price, expected_state.ask_valid, expected_state.ask_price);
+        $display("Received TOB: bid=%b/%0d ask=%b/%0d", observed_state.bid_valid, observed_state.bid_price, observed_state.ask_valid, observed_state.ask_price);
         $display("Expected limits: quantity=%0d notional=%h band=%0d", expected_state.max_order_quantity, expected_state.max_notional, expected_state.max_price_band_ticks);
         $display("Received limits: quantity=%0d notional=%h band=%0d", observed_state.max_order_quantity, observed_state.max_notional, observed_state.max_price_band_ticks);
         $fatal(1, "%s: symbol-state mismatch", check_label);
@@ -489,23 +469,21 @@ module tb_symbol_state_store;
       @(negedge clk);
       message_valid = 1'b1;
       message_type = TOB_UPDATE;
-      message_flags = 8'h03;
+      message_flags = 2'b11;
       message_symbol_id = SYMBOL_A;
       message_payload_0 = BID_PRICE;
-      message_payload_1 = BID_QUANTITY;
+      message_payload_1 = 32'h0;
       message_payload_2 = ASK_PRICE;
-      message_payload_3 = ASK_QUANTITY;
 
       @(posedge clk);
       #1ps;
 
       @(negedge clk);
       message_type = ORDER_INTENT;
-      message_flags = 8'h00;
-      message_payload_0 = 32'h1;
-      message_payload_1 = 32'd1;
-      message_payload_2 = 32'd1;
-      message_payload_3 = 32'h1;
+      message_flags = 2'b00;
+      message_payload_0 = 32'h0;
+      message_payload_1 = 32'h0;
+      message_payload_2 = 32'h0;
 
       @(posedge clk);
       #1ps;
@@ -517,10 +495,7 @@ module tb_symbol_state_store;
       expected_state.bid_valid = 1'b1;
       expected_state.ask_valid = 1'b1;
       expected_state.bid_price = BID_PRICE;
-      expected_state.bid_quantity = BID_QUANTITY;
       expected_state.ask_price = ASK_PRICE;
-      expected_state.ask_quantity = ASK_QUANTITY;
-
       check_lookup(expected_state, "back-to-back lookup");
 
       $display("PASS: back-to-back update and lookup");
@@ -555,9 +530,7 @@ module tb_symbol_state_store;
       expected_state.bid_valid = 1'b0;
       expected_state.ask_valid = 1'b0;
       expected_state.bid_price = '0;
-      expected_state.bid_quantity = '0;
       expected_state.ask_price = '0;
-      expected_state.ask_quantity = '0;
 
       send_order_lookup(SYMBOL_A);
       check_lookup(expected_state, "after TOB reset");

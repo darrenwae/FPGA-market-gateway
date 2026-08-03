@@ -15,7 +15,7 @@ module tb_downstream_sequence_tracker;
   logic [31:0] message_sequence_number;
   logic message_packet_start;
   logic message_packet_end;
-  logic message_is_reset_all;
+  logic message_is_full_reset_all;
 
   logic packet_commit;
   logic packet_discard;
@@ -38,7 +38,7 @@ module tb_downstream_sequence_tracker;
       .message_sequence_number(message_sequence_number),
       .message_packet_start(message_packet_start),
       .message_packet_end(message_packet_end),
-      .message_is_reset_all(message_is_reset_all),
+      .message_is_full_reset_all(message_is_full_reset_all),
 
       .packet_commit(packet_commit),
       .packet_discard(packet_discard),
@@ -69,7 +69,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = '0;
       message_packet_start = 1'b0;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       packet_commit = 1'b0;
       packet_discard = 1'b0;
@@ -158,7 +158,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       #1ps;
 
@@ -212,7 +212,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       #1ps;
       check_outputs(32'd1, 1'b0, 1'b0, 1'b0, "first message");
@@ -283,7 +283,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -367,7 +367,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd2;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       #1ps;
 
@@ -419,7 +419,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -490,7 +490,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -550,7 +550,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd2;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -574,7 +574,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       #1ps;
 
@@ -625,7 +625,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd2;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -649,7 +649,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd100;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b1;
+      message_is_full_reset_all = 1'b1;
 
       #1ps;
 
@@ -663,7 +663,7 @@ module tb_downstream_sequence_tracker;
       message_valid = 1'b0;
       message_packet_start = 1'b0;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
       packet_commit = 1'b1;
 
       @(posedge clk);
@@ -701,7 +701,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd2;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -723,7 +723,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd100;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b1;
+      message_is_full_reset_all = 1'b1;
 
       @(posedge clk);
       #1ps;
@@ -735,7 +735,7 @@ module tb_downstream_sequence_tracker;
       message_valid = 1'b0;
       message_packet_start = 1'b0;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
       packet_discard = 1'b1;
 
       @(posedge clk);
@@ -772,7 +772,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd2;
       message_packet_start = 1'b1;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
@@ -794,7 +794,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd100;
       message_packet_start = 1'b1;
       message_packet_end = 1'b0;
-      message_is_reset_all = 1'b1;
+      message_is_full_reset_all = 1'b1;
 
       @(posedge clk);
       #1ps;
@@ -804,7 +804,7 @@ module tb_downstream_sequence_tracker;
       message_sequence_number = 32'd101;
       message_packet_start = 1'b0;
       message_packet_end = 1'b1;
-      message_is_reset_all = 1'b0;
+      message_is_full_reset_all = 1'b0;
 
       @(posedge clk);
       #1ps;
