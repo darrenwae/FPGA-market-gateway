@@ -4,6 +4,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# verible lint config
+.rules.verible_lint
+
 # Python
 __pycache__/
 *.pyc
@@ -34,6 +37,7 @@ build/
 *.ltx
 *.xpr
 *.srcs/
+/report/
 
 # Waveforms / simulation outputs
 *.vcd

@@ -91,9 +91,9 @@ set_property IOSTANDARD LVDS [get_ports {sys_clk_p}]
 set_property PACKAGE_PIN U24 [get_ports {sys_clk_n}]
 set_property IOSTANDARD LVDS [get_ports {sys_clk_n}]
 
-set_property DIFF_TERM FALSE [get_ports {sys_clk_p}]
-
+set_property DIFF_TERM_ADV TERM_NONE [get_ports {sys_clk_p}]
 create_clock -name sys_clk -period 10.000 [get_ports sys_clk_p]
+set_false_path -to [get_pins {tx_reset_done_rx_sync_reg[0]/D}]
 #set_clock_groups -asynchronous -group [get_clocks {sys_clk}] -group [get_clocks {mmcm0_clk0 okUH0}]
 
 
@@ -985,14 +985,14 @@ set_property IOSTANDARD LVCMOS33 [get_ports {sfp_rate_select_0[*]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {sfp_rate_select_1[*]}]
 
 ## LEDs #####################################################################
-#set_property PACKAGE_PIN G19 [get_ports {led[0]}]
-#set_property PACKAGE_PIN B16 [get_ports {led[1]}]
-#set_property PACKAGE_PIN F22 [get_ports {led[2]}]
-#set_property PACKAGE_PIN E22 [get_ports {led[3]}]
-#set_property PACKAGE_PIN M24 [get_ports {led[4]}]
-#set_property PACKAGE_PIN G22 [get_ports {led[5]}]
-#set_property IOSTANDARD LVCMOS12 [get_ports {led[*]}]
-
+set_property PACKAGE_PIN G19 [get_ports {led[0]}]
+set_property PACKAGE_PIN B16 [get_ports {led[1]}]
+set_property PACKAGE_PIN F22 [get_ports {led[2]}]
+set_property PACKAGE_PIN E22 [get_ports {led[3]}]
+set_property PACKAGE_PIN M24 [get_ports {led[4]}]
+set_property PACKAGE_PIN G22 [get_ports {led[5]}]
+set_property IOSTANDARD LVCMOS12 [get_ports {led[*]}]
+set_false_path -to [get_ports {led[*]}]
 ## Flash ####################################################################
 ## The STARTUPE3 (see UG570) primitive must be used to interface with the FPGA flash
 ## See the following for more information: https://docs.opalkelly.com/xem8320/flash-memory/

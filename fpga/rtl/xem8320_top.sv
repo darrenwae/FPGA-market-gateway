@@ -12,13 +12,28 @@ module xem8320_top (
 
     output logic [1:0] sfp_tx_disable,
     output logic [1:0] sfp_rate_select_0,
-    output logic [1:0] sfp_rate_select_1
+    output logic [1:0] sfp_rate_select_1,
+
+    output logic [5:0] led
 );
 
   localparam logic [7:0] SESSION_STATUS_MESSAGE = 8'h01;
   localparam logic [7:0] ORDER_INTENT_MESSAGE = 8'h04;
   localparam logic [7:0] CONFIG_CONTROL_MESSAGE = 8'h05;
   localparam logic [31:0] CONFIG_RESET_ALL = 32'h1;
+
+  // configure as needed
+  localparam logic [47:0] FPGA_MAC_ADDRESS = 48'h02_00_00_00_00_01;
+  localparam logic [47:0] HOST_MAC_ADDRESS = 48'h02_00_00_00_00_02;
+  localparam logic [31:0] FPGA_IP_ADDRESS = 32'hC0A8_0102;
+  localparam logic [31:0] HOST_IP_ADDRESS = 32'hC0A8_0101;
+  localparam logic [15:0] FPGA_UDP_PORT = 16'd5000;
+  localparam logic [15:0] HOST_UDP_PORT = 16'd5001;
+
+
+  // Approximately 104 ms at 161.13 MHz.
+  localparam int unsigned ACTIVITY_LED_COUNTER_WIDTH = 24;
+
 
   // Clock and GT status signals
   logic clk_freerun;
@@ -48,6 +63,16 @@ module xem8320_top (
   logic rx_pcs_rst;
   (*ASYNC_REG = "TRUE"*)
   logic [1:0] rx_pcs_reset_sync;
+
+  // TX PCS reset synchronization
+  logic tx_pcs_rst;
+  (* ASYNC_REG = "TRUE" *)
+  logic [1:0] tx_pcs_reset_sync;
+
+  // Response CDC reset remains asserted until both clock domains are ready
+  logic rx_to_tx_cdc_rst;
+  (* ASYNC_REG = "TRUE" *)
+  logic [1:0] tx_reset_done_rx_sync;
 
 
   // Channel 0 application RX path
@@ -142,12 +167,40 @@ module xem8320_top (
   logic [31:0] rx0_order_decision;
   logic [31:0] rx0_order_reject_reason;
 
-  // TX PCS is not implemented yet. Keep the GT TX gearbox inputs inactive
-  assign tx_data = '0;
-  assign tx_header = '0;
-  assign tx_sequence = '0;
+  // RX-to-TX response crossing
+  logic tx1_response_start_valid;
+  logic tx1_response_start_ready;
 
-  assign sfp_tx_disable = 2'b11;  // change to 2'b00 when Tx PCS is implemented
+  logic tx1_decision_valid;
+  logic tx1_decision_ready;
+  logic [31:0] tx1_decision_sequence_number;
+  logic [15:0] tx1_decision_symbol_id;
+  logic [31:0] tx1_decision_intent_id;
+  logic [31:0] tx1_decision;
+  logic [31:0] tx1_reject_reason;
+  logic tx1_source_frame_ok;
+
+  // TX Ethernet frame path
+  logic [63:0] tx1_frame_data;
+  logic tx1_frame_start;
+  logic tx1_frame_end;
+  logic tx1_frame_valid;
+  logic tx1_frame_start_ready;
+
+  // LED
+  logic [ACTIVITY_LED_COUNTER_WIDTH-1:0] rx_activity_led_counter;
+  logic [ACTIVITY_LED_COUNTER_WIDTH-1:0] tx_activity_led_counter;
+
+  logic physical_error_led_latched;
+  logic application_error_led_latched;
+
+
+  // Channel 0 TX is unused. Channel 1 is driven by pcs_tx_channel.
+  assign tx_data[0] = '0;
+  assign tx_header[0] = '0;
+  assign tx_sequence[0] = '0;
+
+  assign sfp_tx_disable = 2'b01;
   assign sfp_rate_select_0 = 2'b11;
   assign sfp_rate_select_1 = 2'b11;
 
@@ -198,6 +251,74 @@ module xem8320_top (
   end
 
   assign rx_pcs_rst = rx_pcs_reset_sync[1];
+
+
+  always_ff @(posedge tx_pcs_clk or negedge tx_reset_done) begin
+    if (!tx_reset_done) begin
+      tx_pcs_reset_sync <= 2'b11;
+    end
+    else begin
+      tx_pcs_reset_sync <= {tx_pcs_reset_sync[0], 1'b0};
+    end
+  end
+
+  assign tx_pcs_rst = tx_pcs_reset_sync[1];
+
+  always_ff @(posedge rx_pcs_clk) begin
+    if (rx_pcs_rst) begin
+      tx_reset_done_rx_sync <= '0;
+      rx_to_tx_cdc_rst <= 1'b1;
+    end
+    else begin
+      tx_reset_done_rx_sync <= {tx_reset_done_rx_sync[0], tx_reset_done};
+      rx_to_tx_cdc_rst <= !tx_reset_done_rx_sync[1];
+    end
+  end
+
+  always_ff @(posedge rx_pcs_clk) begin
+    if (rx_pcs_rst) begin
+      rx_activity_led_counter <= '0;
+      physical_error_led_latched <= 1'b0;
+      application_error_led_latched <= 1'b0;
+    end
+    else begin
+      if (rx0_frame_valid && rx0_frame_start) begin
+        rx_activity_led_counter <= '1;
+      end
+      else if (rx_activity_led_counter != '0) begin
+        rx_activity_led_counter <= rx_activity_led_counter - 1'b1;
+      end
+
+      if (rx0_bad_block || rx0_sequence_error || (rx0_fcs_result_valid && !rx0_fcs_ok)) begin
+        physical_error_led_latched <= 1'b1;
+      end
+
+      if (rx0_parser_error || rx0_protocol_error || rx0_sequence_mismatch_event || rx0_stream_fault) begin
+        application_error_led_latched <= 1'b1;
+      end
+    end
+  end
+
+  always_ff @(posedge tx_pcs_clk) begin
+    if (tx_pcs_rst) begin
+      tx_activity_led_counter <= '0;
+    end
+    else begin
+      if (tx1_frame_valid && tx1_frame_start && tx1_frame_start_ready) begin
+        tx_activity_led_counter <= '1;
+      end
+      else if (tx_activity_led_counter != '0) begin
+        tx_activity_led_counter <= tx_activity_led_counter - 1'b1;
+      end
+    end
+  end
+
+  assign led[0] = rx_reset_done && rx_cdr_stable && gt_power_good[0];
+  assign led[1] = rx0_block_lock;
+  assign led[2] = |rx_activity_led_counter;
+  assign led[3] = |tx_activity_led_counter;
+  assign led[4] = physical_error_led_latched;
+  assign led[5] = application_error_led_latched;
 
   // Channel 0 is the host-to-FPGA application receive path.
   eth_rx_channel u_eth_rx_channel (
@@ -377,6 +498,71 @@ module xem8320_top (
       .integrity_failure(rx0_integrity_failure)
   );
 
+  rx_to_tx_cdc_fifo u_rx_to_tx_cdc_fifo (
+      .rx_clk(rx_pcs_clk),
+      .tx_clk(tx_pcs_clk),
+      .rst(rx_to_tx_cdc_rst),
+      .rx_order_intent_valid(rx0_decoded_valid && (rx0_decoded_message_type == ORDER_INTENT_MESSAGE)),
+      .rx_decision_valid(rx0_order_decision_valid),
+      .rx_decision_sequence_number(rx0_order_decision_sequence_number),
+      .rx_decision_symbol_id(rx0_order_decision_symbol_id),
+      .rx_decision_intent_id(rx0_order_decision_intent_id),
+      .rx_decision(rx0_order_decision),
+      .rx_reject_reason(rx0_order_reject_reason),
+      .rx_source_frame_ok(rx0_integrity_ok),
+      .tx_response_start_valid(tx1_response_start_valid),
+      .tx_response_start_ready(tx1_response_start_ready),
+      .tx_decision_valid(tx1_decision_valid),
+      .tx_decision_ready(tx1_decision_ready),
+      .tx_decision_sequence_number(tx1_decision_sequence_number),
+      .tx_decision_symbol_id(tx1_decision_symbol_id),
+      .tx_decision_intent_id(tx1_decision_intent_id),
+      .tx_decision(tx1_decision),
+      .tx_reject_reason(tx1_reject_reason),
+      .tx_source_frame_ok(tx1_source_frame_ok)
+  );
+
+  order_decision_frame_generator #(
+      .SOURCE_MAC_ADDRESS(FPGA_MAC_ADDRESS),
+      .DESTINATION_MAC_ADDRESS(HOST_MAC_ADDRESS),
+      .SOURCE_IP_ADDRESS(FPGA_IP_ADDRESS),
+      .DESTINATION_IP_ADDRESS(HOST_IP_ADDRESS),
+      .SOURCE_UDP_PORT(FPGA_UDP_PORT),
+      .DESTINATION_UDP_PORT(HOST_UDP_PORT)
+  ) u_order_decision_frame_generator (
+      .clk(tx_pcs_clk),
+      .rst(tx_pcs_rst),
+
+      .tx_response_start_valid(tx1_response_start_valid),
+      .tx_response_start_ready(tx1_response_start_ready),
+      .tx_decision_valid(tx1_decision_valid),
+      .tx_decision_ready(tx1_decision_ready),
+      .tx_decision_sequence_number(tx1_decision_sequence_number),
+      .tx_decision_symbol_id(tx1_decision_symbol_id),
+      .tx_decision_intent_id(tx1_decision_intent_id),
+      .tx_decision(tx1_decision),
+      .tx_reject_reason(tx1_reject_reason),
+      .tx_source_frame_ok(tx1_source_frame_ok),
+      .frame_start_ready(tx1_frame_start_ready),
+      .frame_data(tx1_frame_data),
+      .frame_keep(),
+      .frame_start(tx1_frame_start),
+      .frame_end(tx1_frame_end),
+      .frame_valid(tx1_frame_valid)
+  );
+
+  pcs_tx_channel u_pcs_tx_channel (
+      .clk(tx_pcs_clk),
+      .rst(tx_pcs_rst),
+      .frame_data(tx1_frame_data),
+      .frame_start(tx1_frame_start),
+      .frame_end(tx1_frame_end),
+      .frame_valid(tx1_frame_valid),
+      .frame_start_ready(tx1_frame_start_ready),
+      .tx_data(tx_data[1]),
+      .tx_header(tx_header[1]),
+      .tx_sequence(tx_sequence[1])
+  );
 
   // Channel 1 RX is not used by the v0 application.
   assign rx_gearbox_slip[1] = 1'b0;
