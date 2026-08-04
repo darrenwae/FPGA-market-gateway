@@ -263,13 +263,15 @@ module tb_downstream_sequence_tracker;
   task automatic test_packet_discard;
     /*
     Purpose:
-    Verify that sequence progress from a discarded packet is removed.
+    Verify that discarding a speculatively processed packet faults the stream.
 
     Input:
-    A packet containing sequences 1 and 2 is discarded.The following packet begins again with sequence 1.
+    A packet containing sequence numbers 1 and 2 is discarded. An ordinary
+    sequence-1 packet is then presented and committed.
 
     Expected output:
-    The verified next sequence remains 1 after discard. The new sequence-1 packet is accepted and commits to sequence 2.
+    The verified next sequence remains 1. stream_fault asserts after the
+    discard, and the later ordinary packet cannot clear it or advance sequence.
     */
 
     begin
@@ -277,7 +279,6 @@ module tb_downstream_sequence_tracker;
 
       apply_reset();
 
-      // First message of discarded packet
       @(negedge clk);
       message_valid = 1'b1;
       message_sequence_number = 32'd1;
@@ -288,7 +289,6 @@ module tb_downstream_sequence_tracker;
       @(posedge clk);
       #1ps;
 
-      // Final message of discarded packet
       @(negedge clk);
       message_sequence_number = 32'd2;
       message_packet_start = 1'b0;
@@ -297,7 +297,6 @@ module tb_downstream_sequence_tracker;
       @(posedge clk);
       #1ps;
 
-      // Discard the packet
       @(negedge clk);
       message_valid = 1'b0;
       message_packet_end = 1'b0;
@@ -306,12 +305,11 @@ module tb_downstream_sequence_tracker;
       @(posedge clk);
       #1ps;
 
-      check_outputs(32'd1, 1'b0, 1'b0, 1'b0, "after packet discard");
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "after packet discard");
 
       @(negedge clk);
       packet_discard = 1'b0;
 
-      // A new packet must still begin with sequence 1.
       message_valid = 1'b1;
       message_sequence_number = 32'd1;
       message_packet_start = 1'b1;
@@ -319,7 +317,7 @@ module tb_downstream_sequence_tracker;
 
       #1ps;
 
-      check_outputs(32'd1, 1'b0, 1'b0, 1'b0, "new packet after discard");
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "ordinary message while faulted");
 
       @(posedge clk);
       #1ps;
@@ -333,7 +331,7 @@ module tb_downstream_sequence_tracker;
       @(posedge clk);
       #1ps;
 
-      check_outputs(32'd2, 1'b0, 1'b0, 1'b0, "new packet committed");
+      check_outputs(32'd1, 1'b0, 1'b1, 1'b1, "ordinary packet committed while faulted");
 
       @(negedge clk);
       packet_commit = 1'b0;

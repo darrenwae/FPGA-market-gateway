@@ -606,12 +606,10 @@ module tb_symbol_state_store;
     Verify selective global reset and counter-only reset behavior.
 
     Input:
-    Configure SYMBOL_A, globally clear only risk limits, then send a
-    counter-only RESET_ALL.
+    Configure SYMBOL_A, globally clear only risk limits
 
     Expected output:
-    Risk limits clear while market state remains. Counter-only reset does not
-    start a symbol-memory clear or modify symbol state.
+    Risk limits clear while market state remains.
     */
     symbol_state_t expected_state;
 
@@ -634,16 +632,6 @@ module tb_symbol_state_store;
 
       send_order_lookup(SYMBOL_A);
       check_lookup(expected_state, "after global risk-limit reset");
-
-      // Bit 4 belongs to counters and must not clear symbol BRAM
-      send_config(CONFIG_RESET_ALL, 16'h0000, 32'h0000_0010, 32'h0);
-
-      if (state_clear_busy !== 1'b0) begin
-        $fatal(1, "Counter-only reset incorrectly started a state clear");
-      end
-
-      send_order_lookup(SYMBOL_A);
-      check_lookup(expected_state, "after counter-only reset");
 
       $display("PASS: selective RESET_ALL");
     end

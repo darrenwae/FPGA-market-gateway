@@ -21,7 +21,6 @@ module tb_internal_protocol_decoder;
   localparam logic [31:0] CONFIG_SET_MAX_ORDER_QTY = 32'h0000_0004;
   localparam logic [31:0] CONFIG_SET_MAX_NOTIONAL = 32'h0000_0005;
   localparam logic [31:0] CONFIG_SET_PRICE_BAND_TICKS = 32'h0000_0006;
-  localparam logic [31:0] CONFIG_CLEAR_COUNTERS = 32'h0000_0007;
 
 
   // ==========================================================================
@@ -762,10 +761,10 @@ module tb_internal_protocol_decoder;
       run_valid_config_case(32'h0000_0070, 16'h0000, 48'h0102_0304_0506, CONFIG_NOP, 32'h0000_0000, 32'h0000_0000, 32'hC000_0001, "CONFIG_CONTROL NOP");
 
       // RESET_ALL
-      run_valid_config_case(32'h0000_0071, 16'h0000, 48'h1112_1314_1516, CONFIG_RESET_ALL, 32'h0000_001F, 32'h0000_0000, 32'hC000_0002, "CONFIG_CONTROL RESET_ALL");
+      run_valid_config_case(32'h0000_0071, 16'h0000, 48'h1112_1314_1516, CONFIG_RESET_ALL, 32'h0000_000F, 32'h0000_0000, 32'hC000_0002, "CONFIG_CONTROL RESET_ALL");
 
       // RESET_SYMBOL
-      run_valid_config_case(32'h0000_0072, 16'h1234, 48'h2122_2324_2526, CONFIG_RESET_SYMBOL, 32'h0000_0015, 32'h0000_0000, 32'hC000_0003, "CONFIG_CONTROL RESET_SYMBOL");
+      run_valid_config_case(32'h0000_0072, 16'h1234, 48'h2122_2324_2526, CONFIG_RESET_SYMBOL, 32'h0000_000F, 32'h0000_0000, 32'hC000_0003, "CONFIG_CONTROL RESET_SYMBOL");
 
       // SET_SYMBOL_ENABLED
       run_valid_config_case(32'h0000_0073, 16'h2345, 48'h3132_3334_3536, CONFIG_SET_SYMBOL_ENABLED, 32'h0000_0001, 32'h0000_0000, 32'hC000_0004, "CONFIG_CONTROL SET_SYMBOL_ENABLED");
@@ -778,9 +777,6 @@ module tb_internal_protocol_decoder;
 
       // SET_PRICE_BAND_TICKS
       run_valid_config_case(32'h0000_0076, 16'h5678, 48'h6162_6364_6566, CONFIG_SET_PRICE_BAND_TICKS, 32'h0000_0020, 32'h0000_0000, 32'hC000_0007, "CONFIG_CONTROL SET_PRICE_BAND_TICKS");
-
-      // CLEAR_COUNTERS
-      run_valid_config_case(32'h0000_0077, 16'h0000, 48'h7172_7374_7576, CONFIG_CLEAR_COUNTERS, 32'h0000_0003, 32'h0000_0000, 32'hC000_0008, "CONFIG_CONTROL CLEAR_COUNTERS");
 
       finish_test("valid CONFIG_CONTROL commands");
     end
@@ -804,8 +800,8 @@ module tb_internal_protocol_decoder;
       // RESET_ALL with nonzero symbol ID
       run_invalid_config_case(32'h0000_0082, 16'h1234, CONFIG_RESET_ALL, 32'h0000_0001, 32'h0000_0000, "CONFIG_CONTROL RESET_ALL nonzero symbol ID");
 
-      // RESET_ALL with reserved reset-mask bit 5
-      run_invalid_config_case(32'h0000_0083, 16'h0000, CONFIG_RESET_ALL, 32'h0000_0020, 32'h0000_0000, "CONFIG_CONTROL RESET_ALL reserved mask bit");
+      // RESET_ALL with reserved reset-mask bit 4
+      run_invalid_config_case(32'h0000_0083, 16'h0000, CONFIG_RESET_ALL, 32'h0000_0010, 32'h0000_0000, "CONFIG_CONTROL RESET_ALL reserved mask bit");
 
       // RESET_SYMBOL with zero symbol ID
       run_invalid_config_case(32'h0000_0084, 16'h0000, CONFIG_RESET_SYMBOL, 32'h0000_0001, 32'h0000_0000, "CONFIG_CONTROL RESET_SYMBOL zero symbol ID");
@@ -822,12 +818,11 @@ module tb_internal_protocol_decoder;
       // SET_PRICE_BAND_TICKS with nonzero unused value_1
       run_invalid_config_case(32'h0000_0088, 16'h4567, CONFIG_SET_PRICE_BAND_TICKS, 32'h0000_0020, 32'h0000_0001, "CONFIG_CONTROL SET_PRICE_BAND_TICKS nonzero value_1");
 
-      // CLEAR_COUNTERS with reserved counter-mask bit 2
-      run_invalid_config_case(32'h0000_0089, 16'h0000, CONFIG_CLEAR_COUNTERS, 32'h0000_0004, 32'h0000_0000, "CONFIG_CONTROL CLEAR_COUNTERS reserved mask bit");
+      // RESET_SYMBOL with reserved reset-mask bit 4
+      run_invalid_config_case(32'h0000_0089, 16'h1234, CONFIG_RESET_SYMBOL, 32'h0000_0010, 32'h0000_0000, "CONFIG_CONTROL RESET_SYMBOL reserved mask bit");
 
-      // CLEAR_COUNTERS with nonzero unused value_1
-      run_invalid_config_case(32'h0000_008A, 16'h0000, CONFIG_CLEAR_COUNTERS, 32'h0000_0003, 32'h0000_0001, "CONFIG_CONTROL CLEAR_COUNTERS nonzero value_1");
-
+      // Opcode 7 is reserved
+      run_invalid_config_case(32'h0000_008A, 16'h0000, 32'h0000_0007, 32'h0000_0000, 32'h0000_0000, "CONFIG_CONTROL reserved opcode 7");
 
       finish_test("invalid CONFIG_CONTROL commands");
     end

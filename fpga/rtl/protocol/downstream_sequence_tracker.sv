@@ -44,7 +44,7 @@ module downstream_sequence_tracker (
       stream_fault <= 1'b0;
     end
     else begin
-      if (integrity_failure || current_message_has_sequence_mismatch) begin
+      if (integrity_failure || current_message_has_sequence_mismatch || packet_discard) begin
         stream_fault <= 1'b1;
       end
       else if (packet_commit && full_reset_recovery_pending) begin

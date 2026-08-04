@@ -40,7 +40,7 @@ module internal_protocol_decoder (
   localparam logic [31:0] CONFIG_SET_MAX_ORDER_QTY = 32'h4;
   localparam logic [31:0] CONFIG_SET_MAX_NOTIONAL = 32'h5;
   localparam logic [31:0] CONFIG_SET_PRICE_BAND_TICKS = 32'h6;
-  localparam logic [31:0] CONFIG_CLEAR_COUNTERS = 32'h7;
+
 
   logic [7:0] message_type_candidate;
   logic [7:0] flags_candidate;
@@ -148,10 +148,10 @@ module internal_protocol_decoder (
               type_fields_valid = (symbol_id_candidate == 16'h0) && (payload_1_candidate == 32'h0) && (payload_2_candidate == 32'h0);
             end
             CONFIG_RESET_ALL: begin
-              type_fields_valid = (symbol_id_candidate == 16'h0) && (payload_1_candidate[31:5] == 27'b0) && (payload_2_candidate == 32'h0);
+              type_fields_valid = (symbol_id_candidate == 16'h0) && (payload_1_candidate[31:4] == 28'b0) && (payload_2_candidate == 32'h0);
             end
             CONFIG_RESET_SYMBOL: begin
-              type_fields_valid = (symbol_id_candidate != 16'h0) && (payload_1_candidate[31:5] == 27'b0) && (payload_2_candidate == 32'h0);
+              type_fields_valid = (symbol_id_candidate != 16'h0) && (payload_1_candidate[31:4] == 28'b0) && (payload_2_candidate == 32'h0);
             end
             CONFIG_SET_SYMBOL_ENABLED: begin
               type_fields_valid = (symbol_id_candidate != 16'h0) && (payload_1_candidate <= 32'd1) && (payload_2_candidate == 32'h0);
@@ -165,10 +165,6 @@ module internal_protocol_decoder (
             CONFIG_SET_PRICE_BAND_TICKS: begin
               type_fields_valid = (symbol_id_candidate != 16'h0) && (payload_2_candidate == 32'h0);
             end
-            CONFIG_CLEAR_COUNTERS: begin
-              type_fields_valid = (payload_1_candidate[31:2] == 30'b0) && (payload_2_candidate == 32'h0);
-            end
-
             default: begin
               type_fields_valid = 1'b0;
             end

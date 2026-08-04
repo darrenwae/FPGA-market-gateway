@@ -291,7 +291,7 @@ module symbol_state_store (
         clear_address <= clear_address + 1'b1;
       end
     end
-    else if (message_valid && (message_type == CONFIG_CONTROL) && (message_payload_0 == CONFIG_RESET_ALL) && ((message_payload_1 == 32'h0) || (message_payload_1[3:0] != 4'b0000))) begin
+    else if (message_valid && (message_type == CONFIG_CONTROL) && (message_payload_0 == CONFIG_RESET_ALL)) begin
       state_clear_busy <= 1'b1;
       clear_address <= '0;
       clear_mask <= requested_state_groups_to_clear;
