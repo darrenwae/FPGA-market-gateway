@@ -14,7 +14,7 @@ The FPGA parses Ethernet/IP/UDP enough to extract the UDP payload, decodes the i
 - Quantity representation: unsigned integer share quantity.
 - Downstream direction: host to FPGA.
 - Upstream direction: FPGA to host.
-- Downstream sequence numbers increment globally across all host-to-FPGA message types.
+- Downstream sequence numbers are unsigned 32-bit values assigned consecutively across all host-to-FPGA messages and UDP packet boundaries.
 - The FPGA uses fail-closed behavior for order intents. It rejects an order intent unless the required symbol state, market state, top-of-book state, and risk-limit configuration are valid.
 
 ## Common 32-Byte Message Layout
@@ -29,7 +29,7 @@ All protocol messages use the same 32-byte container.
 | 1 | `flags` | 1 byte | Message-type-specific bitmap. Set to 0 when unused. |
 | 2-3 | `reserved` | 2 bytes | Reserved for alignment and future use. Set to 0 in v0. |
 | 4-7 | `sequence_number` | 4 bytes | Stream sequence number. Meaning depends on direction. |
-| 8-9 | `symbol_id` | 2 bytes | Instrument identifier. In v0, this follows NASDAQ `stock_locate` where applicable. |
+| 8-9 | `symbol_id` | 2 bytes | Instrument identifier or 0 for a global/non-symbol message. See [Symbol Identifiers](#symbol-identifiers). |
 | 10-15 | `timestamp` | 6 bytes | Message timestamp for downstream messages. Reserved and set to 0 for upstream `ORDER_DECISION`. |
 | 16-19 | `payload_0` | 4 bytes | Message-specific payload word. |
 | 20-23 | `payload_1` | 4 bytes | Message-specific payload word. |
@@ -38,9 +38,9 @@ All protocol messages use the same 32-byte container.
 
 Reserved bytes and reserved bits shall be set to 0 by the sender. In v0, the receiver treats nonzero reserved fields as a protocol error unless the specific message type defines otherwise.
 
-## Message Type Enum
+## Message Type
 
-### Downstream: PC to FPGA
+### Downstream: Host to FPGA
 
 | Value | Name | Description |
 |---|---|---|
@@ -50,7 +50,7 @@ Reserved bytes and reserved bits shall be set to 0 by the sender. In v0, the rec
 | `0x04` | `ORDER_INTENT` | Proposed order to be checked by the FPGA risk gate. |
 | `0x05` | `CONFIG_CONTROL` | Configuration/control command for FPGA state and risk limits. |
 
-### Upstream: FPGA to PC
+### Upstream: FPGA to Host
 
 | Value | Name | Description |
 |---:|---|---|
@@ -73,6 +73,22 @@ Rules:
 - Messages are parsed in payload order.
 - There is no additional internal packet header in v0.
 
+## Downstream Sequence Numbering
+- After receiver reset, the first expected downstream sequence number is `1`.
+- Every downstream message consumes one sequence number, regardless of message type.
+- Sequence numbers continue across UDP packet boundaries.
+- The next sequence number is `(current_sequence_number + 1) mod 2^32`.
+- Therefore, sequence number `0` follows `0xFFFFFFFF`.
+- UDP batching does not change or restart the sequence.
+
+## Symbol Identifiers
+- For downstream symbol-specific messages, `symbol_id` shall be between `0x0001` and `0x3FFF`, inclusive.
+- The value is the NASDAQ `stock_locate` assigned to the instrument.
+- `symbol_id = 0` is reserved for global or non-symbol-specific messages.
+- Values from `0x4000` through `0xFFFF` are unsupported in v0 and constitute a protocol error when used in a downstream symbol-specific message.
+- `UNKNOWN_SYMBOL` means that an in-range `symbol_id` has not been configured in the FPGA. It does not mean that the identifier is outside the supported range.
+- `ORDER_DECISION` echoes the `symbol_id` from its corresponding `ORDER_INTENT`.
+
 ## Downstream Message: SESSION_STATUS
 ```text
 SESSION_STATUS message format:
@@ -86,10 +102,10 @@ Total size: 32 bytes.
 | `message_type` | `0x01 = SESSION_STATUS` |
 | `flags` | Unused. Shall be 0. |
 | `reserved` | Shall be 0. |
-| `sequence_number` | Monotonically increasing downstream stream sequence number assigned by the host. |
+| `sequence_number` | Global downstream sequence number assigned according to [Downstream Sequence Numbering](#downstream-sequence-numbering). |
 | `symbol_id` | Not symbol-specific. Shall be 0. |
 | `timestamp` | Source timestamp copied from the ITCH System Event message, in nanoseconds since midnight. |
-| `session_state` |Normalized session status enum. |
+| `session_state` | Normalized session status enum. |
 | `payload_1` | Unused. Shall be 0. |
 | `payload_2` | Unused. Shall be 0. |
 | `payload_3` | Unused. Shall be 0. |
@@ -120,10 +136,10 @@ Total size: 32 bytes.
 | `message_type` | `0x02 = TOB_UPDATE` |
 | `flags` | Validity bitmap for the top-of-book snapshot. |
 | `reserved` | Shall be 0. |
-| `sequence_number` | Monotonically increasing downstream stream sequence number assigned by the host. |
+| `sequence_number` | Global downstream sequence number assigned according to [Downstream Sequence Numbering](#downstream-sequence-numbering). |
 | `symbol_id` | Instrument identifier for the current replay session. In v0, this follows NASDAQ `stock_locate`. |
 | `timestamp` | Source event timestamp copied from the ITCH-derived event that caused this internal update, in nanoseconds since midnight. |
-|`bid_price` | Current best bid price in `Price(4)` format. If `bid_valid = 0`, this field shall be 0. |
+| `bid_price` | Current best bid price in `Price(4)` format. If `bid_valid = 0`, this field shall be 0. |
 | `bid_qty` | Aggregate visible quantity available at the current best bid price. If `bid_valid = 0`, this field shall be 0. |
 | `ask_price` | Current best ask price in `Price(4)` format. If `ask_valid = 0`, this field shall be 0. |
 | `ask_qty` | Aggregate visible quantity available at the current best ask price. If `ask_valid = 0`, this field shall be 0. |
@@ -151,7 +167,7 @@ Total size: 32 bytes.
 | `message_type` | `0x03 = SYMBOL_STATUS` |
 | `flags` | Unused. Shall be 0. |
 | `reserved` | Shall be 0. |
-| `sequence_number` | Monotonically increasing downstream stream sequence number assigned by the host. |
+| `sequence_number` | Global downstream sequence number assigned according to [Downstream Sequence Numbering](#downstream-sequence-numbering). |
 | `symbol_id` | Instrument identifier for the affected instrument. In v0, this follows NASDAQ `stock_locate`. |
 | `timestamp` | Source event timestamp copied from the ITCH Stock Trading Action message, in nanoseconds since midnight. |
 | `symbol_status` | Normalized instrument trading status enum. |
@@ -170,7 +186,7 @@ Total size: 32 bytes.
 | `0x00000004` | `TRADING` | `T` |
 | `0x00000005-0xFFFFFFFF` | Reserved | N/A |
 
-Note: In v0, only `TRADING` is treated as tradable by the risk checker. `HALTED`, `PAUSED`, `QUOTATION_ONLY`, and `INVALID` causes a `ORDER_INTENT` rejection.
+Note: In v0, only `TRADING` is treated as tradable by the risk checker. `HALTED`, `PAUSED`, `QUOTATION_ONLY`, and `INVALID` cause an `ORDER_INTENT` rejection.
 
 ## Downstream Message: ORDER_INTENT
 ```text
@@ -185,7 +201,7 @@ Total size: 32 bytes.
 | `message_type` | `0x04 = ORDER_INTENT` |
 | `flags` | Unused in v0. Shall be 0. |
 | `reserved` | Shall be 0. |
-| `sequence_number` | Monotonically increasing downstream stream sequence number assigned by the host. |
+| `sequence_number` | Global downstream sequence number assigned according to [Downstream Sequence Numbering](#downstream-sequence-numbering). |
 | `symbol_id` | Instrument identifier for the order intent. In v0, this follows NASDAQ `stock_locate`. |
 | `timestamp` | Source event timestamp, in nanoseconds since midnight. |
 | `order_side` | BUY/SELL side of the order intent. |
@@ -202,7 +218,10 @@ Total size: 32 bytes.
 | `0x00000002` | `SELL` |
 | `0x00000003-0xFFFFFFFF` | Reserved |
 
-The FPGA emits one `ORDER_DECISION` only for messages it can classify as `ORDER_INTENT`. Any unknown `message_type` values are parser/protocol errors and do not generate `ORDER_DECISION` messages.
+`UNKNOWN_INVALID` is a defined but non-tradable value and produces an `INVALID_ORDER_SIDE` rejection. Values reserved by the table make the `ORDER_INTENT` malformed and produce an `ORDER_INTENT_PROTOCOL_VIOLATION` rejection.
+
+Every message with `message_type = ORDER_INTENT` produces one `ORDER_DECISION`, including a malformed `ORDER_INTENT`. A malformed `ORDER_INTENT` is rejected with `ORDER_INTENT_PROTOCOL_VIOLATION`. Unknown or reserved `message_type` values do not generate an `ORDER_DECISION`.
+
 
 ## Downstream Message: CONFIG_CONTROL
 ```text
@@ -217,7 +236,7 @@ Total size: 32 bytes.
 | `message_type` | `0x05 = CONFIG_CONTROL` |
 | `flags` | Unused in v0. Shall be 0. |
 | `reserved` | Shall be 0. |
-| `sequence_number` | Monotonically increasing downstream stream sequence number assigned by the PC. |
+| `sequence_number` | Global downstream sequence number assigned according to [Downstream Sequence Numbering](#downstream-sequence-numbering). |
 | `symbol_id` | Instrument affected by this command. `0` means global command; nonzero means instrument-specific command. |
 | `timestamp` | Replay timestamp, in nanoseconds since midnight. |
 | `config_opcode` | Config/control command enum. |
@@ -265,11 +284,25 @@ Effect: no state change. The FPGA shall ignore this message.
 | `0x00000000` | Full reset. |
 | bit 0 | Reset top-of-book state for all symbols. |
 | bit 1 | Reset all symbol status state. |
-| bit 2 | Reset all symbol enable state. |
+| bit 2 | Reset all symbol known/configured and enabled state. |
 | bit 3 | Reset risk limits. |
 | bits 4-31 | Reserved. |
 
-Effect: resets global FPGA state according to `reset_mask`. A full reset returns to fail-closed defaults.
+Effect:
+- `RESET_ALL` shall be the only internal message in its UDP payload.
+- A nonzero `reset_mask` clears only the selected per-symbol state groups.
+- A nonzero `reset_mask` does not clear global session state or `STREAM_FAULT`.
+- `reset_mask = 0` performs a full reset:
+  - global session state becomes non-trading;
+  - all symbols become unknown and disabled;
+  - all symbol statuses become `INVALID`;
+  - all top-of-book state is cleared; and
+  - all risk limits become 0.
+- Only an isolated, valid `RESET_ALL` with `reset_mask = 0` may clear `STREAM_FAULT`.
+- While the FPGA is in `STREAM_FAULT`, the recovery `RESET_ALL` may use any sequence number.
+- After successful recovery, the next expected downstream sequence number is the recovery message's `sequence_number + 1`, modulo `2^32`.
+- `RESET_SYMBOL` and partial `RESET_ALL` commands do not clear `STREAM_FAULT`.
+
 
 #### `0x00000002 = RESET_SYMBOL`
 
@@ -286,7 +319,7 @@ Effect: resets global FPGA state according to `reset_mask`. A full reset returns
 | `0x00000000` | Full reset for this symbol. |
 | bit 0 | Reset top-of-book state for this symbol. |
 | bit 1 | Reset symbol status for this symbol. |
-| bit 2 | Reset symbol enable state for this symbol. |
+| bit 2 | Reset symbol known/configured and enabled state for this symbol. |
 | bit 3 | Reset risk limits for this symbol. |
 | bits 4-31 | Reserved. |
 
@@ -300,7 +333,7 @@ Effect: resets only the selected symbol's FPGA state according to `reset_mask`.
 | `config_value_0` | `0x00000000 = disabled`, `0x00000001 = enabled` |
 | `config_value_1` | 0 |
 
-Effect: sets whether the FPGA is allowed to accept order intents for this symbol. If disabled, `ORDER_INTENT` for this symbol shall be rejected even if market status is `TRADING`.
+Effect: marks the target symbol as known/configured and sets whether order intents may be accepted for it. A value of 0 leaves the symbol known but disabled.
 
 #### `0x00000004 = SET_MAX_ORDER_QTY`
 
@@ -346,11 +379,12 @@ For a SELL order intent:
 ```text
 reference = current bid_price
 reject if bid_valid = 0
-reject if order_price < bid_price - max_price_band_ticks
+reject if order_price + max_price_band_ticks < bid_price
 ```
 
 
 ## Upstream Message: ORDER_DECISION
+In v0, each upstream UDP payload contains exactly one `ORDER_DECISION`.
 ```text
 ORDER_DECISION message format:
 [[message_type][flags][reserved][sequence_number][symbol_id][reserved_0][decision][reject_reason][reserved_1][intent_id]]
@@ -421,38 +455,24 @@ Reject reason priority:
 12. `PRICE_BAND_VIOLATION`
 13. `MAX_NOTIONAL_EXCEEDED`
 
-All reject predicates should be computed in a fixed-latency datapath. The priority encoder selects one deterministic `reject_reason` when multiple conditions are true.
+When multiple rejection conditions are true, `reject_reason` shall be the highest-priority matching reason listed above.
 
 ## Fail-Closed Behavior
 
 ### General parser errors
-
-- If UDP payload length is 0, ignore the packet.
-- If UDP payload length is not divisible by 32, treat the packet as a protocol error.
+- If the UDP payload length is not between 32 and 1472 bytes inclusive, in 32-byte increments, treat the packet as a protocol error.
 - If `message_type` is unknown or reserved, treat the message as a protocol error.
 - If reserved bytes or bits are nonzero, treat the message as a protocol error unless the specific message type defines otherwise.
 - If a UDP payload contains more than one `ORDER_INTENT`, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
 - If any message follows an `ORDER_INTENT` in the same UDP payload, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
 - If a `CONFIG_CONTROL` opcode or its opcode-specific arguments violate the defined format, treat the containing packet as a protocol error.
-
-### Late frame-integrity failure
-
-The FPGA may process messages and begin transmitting an `ORDER_DECISION` before the source Ethernet frame's FCS has been validated.
-
-If the source frame later fails integrity validation:
-
-- any speculative `ORDER_DECISION` associated with that frame shall be transmitted with an intentionally incorrect Ethernet FCS;
-- the response shall therefore not be externally valid;
-- the FPGA shall enter `STREAM_FAULT`;
-- all trading state shall be treated as untrusted; and
-- recovery shall require `RESET_ALL` followed by host replay of configuration and market state.
+- If `RESET_ALL` is not the only message in its UDP payload, treat the packet as a protocol error.
 
 ### Sequence errors
-
-- Downstream `sequence_number` increments globally across all PC-to-FPGA message types.
-- If `sequence_number` is not the expected next value, raise `sequence_error` and enter `STREAM_FAULT` state.
+- Downstream sequence validation follows [Downstream Sequence Numbering](#downstream-sequence-numbering).
+- If `sequence_number` is not the expected next value, the containing packet is invalid and the receiver enters `STREAM_FAULT`.
 - In `STREAM_FAULT` state, the FPGA shall reject all subsequently decoded `ORDER_INTENT` messages with `STREAM_FAULT`.
-- `STREAM_FAULT` is cleared only by `RESET_ALL`.
+- `STREAM_FAULT` recovery follows the full-reset requirements defined for `RESET_ALL`.
 
 ### ORDER_INTENT rejection rules
 
@@ -465,7 +485,7 @@ Reject the order intent if any of the following is true:
 - symbol is disabled.
 - `symbol_status` is not `TRADING`.
 - required top-of-book side is invalid.
-- `order_side` is not `BUY` or `SELL`.
+- `order_side` is `UNKNOWN_INVALID`.
 - `order_qty` is 0.
 - `order_price` is 0.
 - `order_qty > max_order_qty`.
@@ -477,7 +497,6 @@ Reject the order intent if any of the following is true:
 A malformed `CONFIG_CONTROL` invalidates the containing UDP packet.
 
 Treat any of the following as a protocol error:
-
 - unknown or reserved `config_opcode`;
 - invalid `symbol_id` for the selected opcode;
 - reserved config bits set;
@@ -485,21 +504,5 @@ Treat any of the following as a protocol error:
 - nonzero field that the selected opcode requires to be 0.
 
 On error:
-
-- ignore the configuration command;
-- do not modify configuration state; and
-- abort all speculative state associated with the containing packet.
-
-### Default reset state
-
-After reset:
-
-- `STREAM_FAULT` cleared.
-- all symbols disabled.
-- all symbol statuses set to `UNKNOWN_INVALID`.
-- all top-of-book valid bits cleared.
-- all top-of-book prices and quantities set to 0.
-- all risk limits cleared.
-
-This default state is fail-closed: order intents are rejected until the host explicitly configures the symbol and the required risk limits.
-
+- ignore the configuration command.
+- do not modify configuration state.

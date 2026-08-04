@@ -18,7 +18,6 @@ namespace gateway::commands {
         SetMaxOrderQty = 4,
         SetMaxNotional = 5,
         SetPriceBandTicks = 6,
-        ClearCounters = 7,
     };
 
     struct OrderIntent {

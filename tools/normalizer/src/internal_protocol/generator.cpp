@@ -173,7 +173,6 @@ namespace {
             case ConfigOpcode::SetMaxOrderQty:
             case ConfigOpcode::SetMaxNotional:
             case ConfigOpcode::SetPriceBandTicks:
-            case ConfigOpcode::ClearCounters:
                 break;
 
             default:
