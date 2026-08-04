@@ -236,8 +236,7 @@ Total size: 32 bytes.
 | `0x00000004` | `SET_MAX_ORDER_QTY` |
 | `0x00000005` | `SET_MAX_NOTIONAL` |
 | `0x00000006` | `SET_PRICE_BAND_TICKS` |
-| `0x00000007` | `CLEAR_COUNTERS` |
-| `0x00000008-0xFFFFFFFF` | Reserved |
+| `0x00000007-0xFFFFFFFF` | Reserved |
 
 ### CONFIG_CONTROL Opcode Arguments
 
@@ -268,8 +267,7 @@ Effect: no state change. The FPGA shall ignore this message.
 | bit 1 | Reset all symbol status state. |
 | bit 2 | Reset all symbol enable state. |
 | bit 3 | Reset risk limits. |
-| bit 4 | Reset counters. |
-| bits 5-31 | Reserved. |
+| bits 4-31 | Reserved. |
 
 Effect: resets global FPGA state according to `reset_mask`. A full reset returns to fail-closed defaults.
 
@@ -290,8 +288,7 @@ Effect: resets global FPGA state according to `reset_mask`. A full reset returns
 | bit 1 | Reset symbol status for this symbol. |
 | bit 2 | Reset symbol enable state for this symbol. |
 | bit 3 | Reset risk limits for this symbol. |
-| bit 4 | Reset counters for this symbol. |
-| bits 5-31 | Reserved. |
+| bits 4-31 | Reserved. |
 
 Effect: resets only the selected symbol's FPGA state according to `reset_mask`.
 
@@ -352,24 +349,6 @@ reject if bid_valid = 0
 reject if order_price < bid_price - max_price_band_ticks
 ```
 
-#### `0x00000007 = CLEAR_COUNTERS`
-
-| Field | Required value |
-|---|---|
-| `symbol_id` | 0 for global counters; target symbol ID for symbol-specific counters, if implemented. |
-| `config_value_0` | `counter_mask` |
-| `config_value_1` | 0 |
-
-`counter_mask`:
-
-| Value / bit | Meaning |
-|---|---|
-| `0x00000000` | Clear all counters. |
-| bit 0 | Clear decision counters. |
-| bit 1 | Clear parser/error counters. |
-| bits 2-31 | Reserved. |
-
-Effect: clears selected FPGA debug counters. Does not modify top-of-book state, symbol status, symbol enable state, or risk limits.
 
 ## Upstream Message: ORDER_DECISION
 ```text
@@ -454,7 +433,6 @@ All reject predicates should be computed in a fixed-latency datapath. The priori
 - If reserved bytes or bits are nonzero, treat the message as a protocol error unless the specific message type defines otherwise.
 - If a UDP payload contains more than one `ORDER_INTENT`, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
 - If any message follows an `ORDER_INTENT` in the same UDP payload, treat the packet as an `ORDER_INTENT_PROTOCOL_VIOLATION`.
-- Protocol errors increment `parser_error_counter`.
 - If a `CONFIG_CONTROL` opcode or its opcode-specific arguments violate the defined format, treat the containing packet as a protocol error.
 
 ### Late frame-integrity failure
@@ -509,9 +487,8 @@ Treat any of the following as a protocol error:
 On error:
 
 - ignore the configuration command;
-- do not modify configuration state;
-- abort all speculative state associated with the containing packet; and
-- increment `parser_error_counter`.
+- do not modify configuration state; and
+- abort all speculative state associated with the containing packet.
 
 ### Default reset state
 
@@ -523,7 +500,6 @@ After reset:
 - all top-of-book valid bits cleared.
 - all top-of-book prices and quantities set to 0.
 - all risk limits cleared.
-- counters cleared.
 
 This default state is fail-closed: order intents are rejected until the host explicitly configures the symbol and the required risk limits.
 
