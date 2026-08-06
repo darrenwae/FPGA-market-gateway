@@ -1,17 +1,15 @@
 #include "normalizer/internal_protocol/outbound_sequencer.hpp"
 #include "normalizer/util/endian.hpp"
 
-
-namespace normalizer::internal_protocol {
-    SequencedObject OutboundSequencer::assignSequenceNumber(InternalProtocolObject& object) noexcept {
-        SequencedObject result{};
+namespace normalizer::internal_protocol{
+    SequenceNumberAssignResult OutboundSequencer::assignSequenceNumber (InternalProtocolObject& object) noexcept {
         if (nextSequenceNumber_ == 0) {
-            result.status = SequenceNumberAssignStatus::SequenceNumberExhausted;
-            return result;
+            return { 0, SequenceNumberAssignStatus::SequenceNumberExhausted };
         }
-        util::writeBE32(object.data() + SequenceNumberOffset, nextSequenceNumber_++);
-        result.object = object;
-        result.status = SequenceNumberAssignStatus::Ok;
-        return result;
+
+        const std::uint32_t assignedSequenceNumber = nextSequenceNumber_++;
+        util::writeBE32 (object.data () + SequenceNumberOffset, assignedSequenceNumber);
+
+        return {assignedSequenceNumber, SequenceNumberAssignStatus::Ok };
     }
 }
