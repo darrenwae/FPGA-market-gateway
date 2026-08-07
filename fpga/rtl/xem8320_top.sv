@@ -23,12 +23,12 @@ module xem8320_top (
   localparam logic [31:0] CONFIG_RESET_ALL = 32'h1;
 
   // configure as needed
-  localparam logic [47:0] FPGA_MAC_ADDRESS = 48'h02_00_00_00_00_01;
-  localparam logic [47:0] HOST_MAC_ADDRESS = 48'h02_00_00_00_00_02;
-  localparam logic [31:0] FPGA_IP_ADDRESS = 32'hC0A8_0102;
-  localparam logic [31:0] HOST_IP_ADDRESS = 32'hC0A8_0101;
-  localparam logic [15:0] FPGA_UDP_PORT = 16'd5000;
-  localparam logic [15:0] HOST_UDP_PORT = 16'd5001;
+  localparam logic [47:0] UPSTREAM_FPGA_MAC_ADDRESS = 48'h02_00_00_00_00_02;
+  localparam logic [47:0] UPSTREAM_HOST_MAC_ADDRESS = 48'h00_0F_53_36_9D_81;
+  localparam logic [31:0] UPSTREAM_FPGA_IP_ADDRESS = 32'hC0A8_0202;
+  localparam logic [31:0] UPSTREAM_HOST_IP_ADDRESS = 32'hC0A8_0201;
+  localparam logic [15:0] UPSTREAM_FPGA_UDP_PORT = 16'd5000;
+  localparam logic [15:0] UPSTREAM_HOST_UDP_PORT = 16'd5001;
 
 
   // Approximately 104 ms at 161.13 MHz.
@@ -122,7 +122,6 @@ module xem8320_top (
   logic rx0_decoded_packet_abort;
   logic rx0_protocol_error;
 
-
   // Packet controller
   logic rx0_packet_commit;
   logic rx0_packet_discard;
@@ -195,12 +194,7 @@ module xem8320_top (
   logic application_error_led_latched;
 
 
-  // Channel 0 TX is unused. Channel 1 is driven by pcs_tx_channel.
-  assign tx_data[0] = '0;
-  assign tx_header[0] = '0;
-  assign tx_sequence[0] = '0;
-
-  assign sfp_tx_disable = 2'b01;
+  assign sfp_tx_disable = 2'b00;
   assign sfp_rate_select_0 = 2'b11;
   assign sfp_rate_select_1 = 2'b11;
 
@@ -313,7 +307,7 @@ module xem8320_top (
     end
   end
 
-  assign led[0] = rx_reset_done && rx_cdr_stable && gt_power_good[0];
+  assign led[0] = rx_reset_done && tx_reset_done;
   assign led[1] = rx0_block_lock;
   assign led[2] = |rx_activity_led_counter;
   assign led[3] = |tx_activity_led_counter;
@@ -523,16 +517,15 @@ module xem8320_top (
   );
 
   order_decision_frame_generator #(
-      .SOURCE_MAC_ADDRESS(FPGA_MAC_ADDRESS),
-      .DESTINATION_MAC_ADDRESS(HOST_MAC_ADDRESS),
-      .SOURCE_IP_ADDRESS(FPGA_IP_ADDRESS),
-      .DESTINATION_IP_ADDRESS(HOST_IP_ADDRESS),
-      .SOURCE_UDP_PORT(FPGA_UDP_PORT),
-      .DESTINATION_UDP_PORT(HOST_UDP_PORT)
+      .SOURCE_MAC_ADDRESS(UPSTREAM_FPGA_MAC_ADDRESS),
+      .DESTINATION_MAC_ADDRESS(UPSTREAM_HOST_MAC_ADDRESS),
+      .SOURCE_IP_ADDRESS(UPSTREAM_FPGA_IP_ADDRESS),
+      .DESTINATION_IP_ADDRESS(UPSTREAM_HOST_IP_ADDRESS),
+      .SOURCE_UDP_PORT(UPSTREAM_FPGA_UDP_PORT),
+      .DESTINATION_UDP_PORT(UPSTREAM_HOST_UDP_PORT)
   ) u_order_decision_frame_generator (
       .clk(tx_pcs_clk),
       .rst(tx_pcs_rst),
-
       .tx_response_start_valid(tx1_response_start_valid),
       .tx_response_start_ready(tx1_response_start_ready),
       .tx_decision_valid(tx1_decision_valid),
@@ -562,6 +555,19 @@ module xem8320_top (
       .tx_data(tx_data[1]),
       .tx_header(tx_header[1]),
       .tx_sequence(tx_sequence[1])
+  );
+
+  pcs_tx_channel u_pcs_tx_idle_channel (
+      .clk(tx_pcs_clk),
+      .rst(tx_pcs_rst),
+      .frame_data('0),
+      .frame_start(1'b0),
+      .frame_end(1'b0),
+      .frame_valid(1'b0),
+      .frame_start_ready(),
+      .tx_data(tx_data[0]),
+      .tx_header(tx_header[0]),
+      .tx_sequence(tx_sequence[0])
   );
 
   // Channel 1 RX is not used by the v0 application.

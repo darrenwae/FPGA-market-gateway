@@ -29,8 +29,9 @@ namespace {
     constexpr std::size_t ReplayQueueCapacity{1'048'576};
     constexpr std::uint64_t MaxTobBatchDelayNs{1'000};
 
-    constexpr char HostIpAddress[]{"192.168.1.1"};
-    constexpr char FpgaIpAddress[]{"192.168.1.2"};
+    constexpr char DownstreamFpgaIpAddress[]{"192.168.3.2"};
+    constexpr char UpstreamHostIpAddress[]{"192.168.2.1"};
+    constexpr char UpstreamFpgaIpAddress[]{"192.168.2.2"};
     constexpr std::uint16_t FpgaUdpPort{5000};
     constexpr std::uint16_t HostUdpPort{5001};
 
@@ -265,8 +266,8 @@ int main(int argc, char** argv) {
     gateway::GatewayConfig gatewayConfig{};
     gatewayConfig.enabledSymbols = std::move(enabledSymbols);
     gateway::OrderIntentPolicy orderPolicy{};
-    normalizer::transport::UdpSender sender{FpgaIpAddress,FpgaUdpPort};
-    normalizer::transport::UdpReceiver receiver{HostIpAddress,HostUdpPort,FpgaIpAddress,FpgaUdpPort};
+    normalizer::transport::UdpSender sender{DownstreamFpgaIpAddress,FpgaUdpPort};
+    normalizer::transport::UdpReceiver receiver{UpstreamHostIpAddress,HostUdpPort,UpstreamFpgaIpAddress,FpgaUdpPort};
 
     if (!sender.isOpen() || !receiver.isOpen()) {
         std::cerr << "Unable to open UDP transport\n";

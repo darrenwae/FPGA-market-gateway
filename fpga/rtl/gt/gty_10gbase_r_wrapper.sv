@@ -12,15 +12,15 @@ module gty_10gbase_r_wrapper (
     output logic [1:0] sfp_tx_n,
 
     input logic [1:0][63:0] tx_data,
-    input logic [1:0][5:0] tx_header,
-    input logic [1:0][6:0] tx_sequence,
+    input logic [1:0][ 5:0] tx_header,
+    input logic [1:0][ 6:0] tx_sequence,
 
     input logic [1:0] rx_gearbox_slip,
 
     output logic [1:0][63:0] rx_data,
-    output logic [1:0][5:0] rx_header,
-    output logic [1:0][1:0] rx_data_valid,
-    output logic [1:0][1:0] rx_header_valid,
+    output logic [1:0][ 5:0] rx_header,
+    output logic [1:0][ 1:0] rx_data_valid,
+    output logic [1:0][ 1:0] rx_header_valid,
 
     output logic tx_pcs_clk,
     output logic rx_pcs_clk,
@@ -35,8 +35,11 @@ module gty_10gbase_r_wrapper (
   logic tx_userclk_reset;
   logic rx_userclk_reset;
 
-  assign tx_userclk_reset = ~tx_reset_done;
-  assign rx_userclk_reset = ~rx_reset_done;
+  logic [1:0] tx_pma_reset_done;
+  logic [1:0] rx_pma_reset_done;
+
+  assign tx_userclk_reset = !(&tx_pma_reset_done);
+  assign rx_userclk_reset = !(&rx_pma_reset_done);
 
   IBUFDS_GTE4 #(
       .REFCLK_EN_TX_PATH(1'b0),
@@ -101,8 +104,8 @@ module gty_10gbase_r_wrapper (
 
       // GT status
       .gtpowergood_out(gt_power_good),
-      .rxpmaresetdone_out(),
-      .txpmaresetdone_out()
+      .rxpmaresetdone_out(rx_pma_reset_done),
+      .txpmaresetdone_out(tx_pma_reset_done)
   );
 
 endmodule
