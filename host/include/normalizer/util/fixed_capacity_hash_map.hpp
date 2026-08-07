@@ -52,6 +52,18 @@ namespace normalizer::util {
             return nullptr;
         }
 
+
+        void updateExisting(Key key, const Value& value) noexcept {
+            std::uint32_t index = buckets_[bucketFor(key)];
+
+            while (nodes_[index].key != key) {
+                index = nodes_[index].nextIndex;
+            }
+
+            nodes_[index].value = value;
+        }
+
+
         [[nodiscard]] bool contains(Key key) const noexcept {
             return find(key) != nullptr;
         }
@@ -116,7 +128,7 @@ namespace normalizer::util {
         }
 
         [[nodiscard]] static std::size_t bucketFor(Key key) noexcept {
-            return static_cast<std::size_t>(mix(static_cast<std::uint64_t>(key))) & (BucketCount - 1);
+            return mix(static_cast<std::uint64_t>(key)) & (BucketCount - 1);
         }
 
         std::vector<std::uint32_t> buckets_;
@@ -125,4 +137,4 @@ namespace normalizer::util {
         std::size_t size_{0};
     };
 
-} // namespace normalizer::util
+}

@@ -18,8 +18,8 @@ namespace normalizer::book {
             }
 
             std::swap(side.levels[lhs], side.levels[rhs]);
-            *side.levelIndexByPrice.find(side.levels[lhs].price) = lhs;
-            *side.levelIndexByPrice.find(side.levels[rhs].price) = rhs;
+            side.levelIndexByPrice.updateExisting(side.levels[lhs].price, lhs);
+            side.levelIndexByPrice.updateExisting(side.levels[rhs].price, rhs);
         }
 
         template <bool IsBid>
@@ -118,7 +118,7 @@ namespace normalizer::book {
             }
 
             side.levels[index] = side.levels[lastIndex];
-            *side.levelIndexByPrice.find(side.levels[index].price) = index;
+            side.levelIndexByPrice.updateExisting(side.levels[index].price, index);
 
             if (index > 0) {
                 const std::uint32_t parent = (index - 1) / 2;

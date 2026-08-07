@@ -83,7 +83,7 @@ namespace {
                 continue;
             }
 
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (errno == EAGAIN) {
                 return {UdpReceiveStatus::NoPacketAvailable, 0};
             }
 

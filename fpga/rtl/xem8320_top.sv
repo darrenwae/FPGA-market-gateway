@@ -283,12 +283,18 @@ module xem8320_top (
         rx_activity_led_counter <= rx_activity_led_counter - 1'b1;
       end
 
-      if (rx0_bad_block || rx0_sequence_error || (rx0_fcs_result_valid && !rx0_fcs_ok)) begin
-        physical_error_led_latched <= 1'b1;
+      if (rx0_state_clear_busy) begin
+        physical_error_led_latched <= 1'b0;
+        application_error_led_latched <= 1'b0;
       end
+      else begin
+        if (rx0_bad_block || rx0_sequence_error || (rx0_fcs_result_valid && !rx0_fcs_ok)) begin
+          physical_error_led_latched <= 1'b1;
+        end
 
-      if (rx0_parser_error || rx0_protocol_error || rx0_sequence_mismatch_event || rx0_stream_fault) begin
-        application_error_led_latched <= 1'b1;
+        if (rx0_parser_error || rx0_protocol_error || rx0_sequence_mismatch_event || rx0_stream_fault) begin
+          application_error_led_latched <= 1'b1;
+        end
       end
     end
   end
