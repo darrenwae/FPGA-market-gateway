@@ -18,7 +18,7 @@ namespace {
 }
 
     UdpSender::UdpSender(const char* destIP, std::uint16_t destPort) noexcept {
-        socketFd_ = ::socket(AF_INET, SOCK_DGRAM, 0);
+        socketFd_ = ::socket(AF_INET,SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,0);
         if (socketFd_ < 0) {
             return;
         }
