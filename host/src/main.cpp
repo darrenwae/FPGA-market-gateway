@@ -230,10 +230,38 @@ namespace {
             case ReplayStatus::Complete:
             case ReplayStatus::Stopped:
                 return false;
-
             default:
                 return true;
         }
+    }
+
+    constexpr std::string_view hostGatewayStatusName(
+        gateway::HostGatewayStatus status) noexcept {
+
+        switch (status) {
+            case gateway::HostGatewayStatus::Ok:
+                return "Ok";
+            case gateway::HostGatewayStatus::ItchDecodeFailed:
+                return "ItchDecodeFailed";
+            case gateway::HostGatewayStatus::BookUpdateFailed:
+                return "BookUpdateFailed";
+            case gateway::HostGatewayStatus::ProtocolGenerationFailed:
+                return "ProtocolGenerationFailed";
+            case gateway::HostGatewayStatus::SequenceNumberExhausted:
+                return "SequenceNumberExhausted";
+            case gateway::HostGatewayStatus::PendingIntentQueueFull:
+                return "PendingIntentQueueFull";
+            case gateway::HostGatewayStatus::DownstreamSendFailed:
+                return "DownstreamSendFailed";
+            case gateway::HostGatewayStatus::UpstreamReceiveFailed:
+                return "UpstreamReceiveFailed";
+            case gateway::HostGatewayStatus::InvalidOrderDecision:
+                return "InvalidOrderDecision";
+            case gateway::HostGatewayStatus::UnexpectedOrderDecision:
+                return "UnexpectedOrderDecision";
+        }
+
+        return "Unknown";
     }
 
 }
@@ -315,6 +343,10 @@ int main(int argc, char** argv) {
 
     normalizer::itch::RawMessage message{};
     gateway::HostGatewayStatus gatewayFailure{gateway::HostGatewayStatus::Ok};
+    const char* gatewayFailureStage{"none"};
+    std::uint64_t processedMessageCount{};
+    std::uint64_t lastItchTimestamp{};
+    char lastItchMessageType{'?'};
     bool downstreamFlushed{false};
 
     while (interruptRequested == 0) {
@@ -324,6 +356,7 @@ int main(int argc, char** argv) {
 
         if (serviceResult.status != gateway::HostGatewayStatus::Ok) {
             gatewayFailure = serviceResult.status;
+            gatewayFailureStage = "service";
             break;
         }
 
@@ -331,13 +364,19 @@ int main(int argc, char** argv) {
 
         if (queue->tryPop(message)) {
             didWork = true;
+            lastItchMessageType = static_cast<char>(message.payload[0]);
+            static_cast<void>(extractItchTimestamp(message, lastItchTimestamp));
 
-            const auto processStatus = hostGateway->processRawMessage(message, nowNs);
+            const auto processStatus =
+                hostGateway->processRawMessage(message, nowNs);
 
             if (processStatus != gateway::HostGatewayStatus::Ok) {
                 gatewayFailure = processStatus;
+                gatewayFailureStage = "message processing";
                 break;
             }
+
+            ++processedMessageCount;
         }
 
         const ReplayStatus currentReplayStatus = replayStatus.load(std::memory_order_acquire);
@@ -350,6 +389,7 @@ int main(int argc, char** argv) {
             if (!downstreamFlushed) {
                 gatewayFailure = hostGateway->flushDownstream();
                 if (gatewayFailure != gateway::HostGatewayStatus::Ok) {
+                    gatewayFailureStage = "final downstream flush";
                     break;
                 }
                 downstreamFlushed = true;
@@ -374,7 +414,16 @@ int main(int argc, char** argv) {
     }
 
     if (gatewayFailure != gateway::HostGatewayStatus::Ok) {
-        std::cerr << "Host gateway processing failed\n";
+        std::cerr
+            << "Host gateway processing failed:"
+            << " status=" << hostGatewayStatusName(gatewayFailure)
+            << " stage=" << gatewayFailureStage
+            << " processed_messages=" << processedMessageCount
+            << " last_itch_type=" << lastItchMessageType
+            << " last_itch_timestamp_ns=" << lastItchTimestamp
+            << " pending_order_intents="
+            << hostGateway->pendingOrderIntentCount()
+            << '\n';
         return 1;
     }
 
