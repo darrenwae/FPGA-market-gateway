@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstddef>
 #include <cerrno>
+#include <immintrin.h>
 
 namespace normalizer::transport {
 namespace {
@@ -15,6 +16,8 @@ namespace {
             socketFd = -1;
         }
     }
+
+    constexpr unsigned MaxTransientSendRetries{1'000'000};
 }
 
     UdpSender::UdpSender(const char* destIP, std::uint16_t destPort) noexcept {
@@ -54,14 +57,26 @@ namespace {
             return false;
         }
 
+        unsigned transientSendRetries{0};
+
         while(true) {
             const ssize_t bytesSent = ::send(socketFd_, data, length, 0);
+
             if (bytesSent < 0) {
-                if (errno == EINTR) {
+                const int sendError{errno};
+
+                if (sendError == EINTR) {
+                    continue;
+                }
+
+                if ((sendError == EAGAIN || sendError == ENOBUFS) && transientSendRetries < MaxTransientSendRetries) {
+                    ++transientSendRetries;
+                    _mm_pause();
                     continue;
                 }
                 return false;
             }
+
             return static_cast<std::size_t>(bytesSent) == length;
 
         }
