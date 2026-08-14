@@ -24,7 +24,7 @@ module xem8320_top (
 
   // configure as needed
   localparam logic [47:0] UPSTREAM_FPGA_MAC_ADDRESS = 48'h02_00_00_00_00_02;
-  localparam logic [47:0] UPSTREAM_HOST_MAC_ADDRESS = 48'h00_0F_53_36_9D_81;
+  localparam logic [47:0] UPSTREAM_HOST_MAC_ADDRESS = 48'h50_7C_6F_8C_CF_4D;
   localparam logic [31:0] UPSTREAM_FPGA_IP_ADDRESS = 32'hC0A8_0202;
   localparam logic [31:0] UPSTREAM_HOST_IP_ADDRESS = 32'hC0A8_0201;
   localparam logic [15:0] UPSTREAM_FPGA_UDP_PORT = 16'd5000;
@@ -193,7 +193,6 @@ module xem8320_top (
   logic physical_error_led_latched;
   logic application_error_led_latched;
 
-
   assign sfp_tx_disable = 2'b00;
   assign sfp_rate_select_0 = 2'b11;
   assign sfp_rate_select_1 = 2'b11;
@@ -269,6 +268,7 @@ module xem8320_top (
     end
   end
 
+
   always_ff @(posedge rx_pcs_clk) begin
     if (rx_pcs_rst) begin
       rx_activity_led_counter <= '0;
@@ -291,7 +291,6 @@ module xem8320_top (
         if (rx0_bad_block || rx0_sequence_error || (rx0_fcs_result_valid && !rx0_fcs_ok)) begin
           physical_error_led_latched <= 1'b1;
         end
-
         if (rx0_parser_error || rx0_protocol_error || rx0_sequence_mismatch_event || rx0_stream_fault) begin
           application_error_led_latched <= 1'b1;
         end

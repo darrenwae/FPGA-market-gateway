@@ -40,8 +40,8 @@ module rx_packet_controller (
   logic discard_event;  // Report a packet failure
 
 
-  assign integrity_known = fcs_seen;
-  assign integrity_ok = fcs_seen && fcs_passed;
+  assign integrity_known = fcs_seen || fcs_event;
+  assign integrity_ok = (fcs_seen && fcs_passed) || (fcs_event && fcs_event_passed);
 
 
   always_comb begin
