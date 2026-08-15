@@ -1,64 +1,65 @@
 #include "normalizer/transport/udp_receiver.hpp"
-
-#include <arpa/inet.h>
-#include <cerrno>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <ws2tcpip.h>
 
 namespace normalizer::transport {
 namespace {
 
-	void closeSocket(int& socketFd) noexcept {
-        if (socketFd >= 0) {
-            ::close(socketFd);
-			socketFd = -1;
-		}
+	void closeSocket(SOCKET& socket) noexcept {
+        if (socket != INVALID_SOCKET) {
+            ::closesocket(socket);
+            socket = INVALID_SOCKET;
+        }
 	}
 
 }
     
     UdpReceiver::UdpReceiver(const char* localIpAddress,std::uint16_t localPort,const char* peerIpAddress,std::uint16_t peerPort) noexcept {
-        socketFd_ = ::socket(AF_INET,SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
+        socket_ = ::socket(AF_INET,SOCK_DGRAM, IPPROTO_UDP);
 
-        if (socketFd_ < 0) {
+        if (socket_ == INVALID_SOCKET) {
+            return;
+        }
+
+        u_long nonblocking{1};
+        if (::ioctlsocket(socket_,static_cast<long>(FIONBIO),&nonblocking) == SOCKET_ERROR) {
+            closeSocket(socket_);
             return;
         }
 
         sockaddr_in localAddress{};
         localAddress.sin_family = AF_INET;
-        localAddress.sin_port = htons(localPort);
+        localAddress.sin_port = ::htons(localPort);
 
-        if (::inet_pton(AF_INET, localIpAddress, &localAddress.sin_addr) != 1) {
-            closeSocket(socketFd_);
+        if (::inet_pton(AF_INET,localIpAddress,&localAddress.sin_addr) != 1) {
+            closeSocket(socket_);
             return;
         }
 
-        if (::bind(socketFd_, reinterpret_cast<const sockaddr*>(&localAddress), sizeof(localAddress)) != 0) {
-            closeSocket(socketFd_);
+        if (::bind(socket_, reinterpret_cast<const sockaddr*>(&localAddress), static_cast<int>(sizeof(localAddress))) == SOCKET_ERROR) {
+            closeSocket(socket_);
             return;
         }
 
         sockaddr_in peerAddress{};
         peerAddress.sin_family = AF_INET;
-        peerAddress.sin_port = htons(peerPort);
+        peerAddress.sin_port = ::htons(peerPort);
 
-        if (::inet_pton(AF_INET, peerIpAddress, &peerAddress.sin_addr) != 1) {
-            closeSocket(socketFd_);
+        if (::inet_pton(AF_INET,peerIpAddress,&peerAddress.sin_addr) != 1) {
+            closeSocket(socket_);
             return;
         }
 
-        if (::connect(socketFd_, reinterpret_cast<const sockaddr*>(&peerAddress), sizeof(peerAddress)) != 0) {
-            closeSocket(socketFd_);
+        if (::connect(socket_,reinterpret_cast<const sockaddr*>(&peerAddress),static_cast<int>(sizeof(peerAddress))) == SOCKET_ERROR) {
+            closeSocket(socket_);
         }
     }
 
     UdpReceiver::~UdpReceiver() noexcept {
-        closeSocket(socketFd_);
+        closeSocket(socket_);
     }
 
     bool UdpReceiver::isOpen() const noexcept {
-        return socketFd_ >= 0;
+        return socket_ != INVALID_SOCKET;
     }
 
     UdpReceiveResult UdpReceiver::receive(std::uint8_t* buffer, std::size_t capacity) noexcept {
@@ -67,24 +68,23 @@ namespace {
         }
 
         while (true) {
-            const ssize_t receivedBytes = ::recv(socketFd_, buffer, capacity, MSG_TRUNC);
+            const int receivedBytes = ::recv(socket_,reinterpret_cast<char*>(buffer),static_cast<int>(capacity),0);
 
-            if (receivedBytes >= 0) {
-                const auto payloadLength = static_cast<std::size_t>(receivedBytes);
-
-                if (payloadLength > capacity) {
-                    return {UdpReceiveStatus::PacketTooLarge,payloadLength};
-                }
-
-                return {UdpReceiveStatus::PacketReceived,payloadLength};
+            if (receivedBytes != SOCKET_ERROR) {
+                return {UdpReceiveStatus::PacketReceived,static_cast<std::size_t>(receivedBytes)};
             }
 
-            if (errno == EINTR) {
+            const int receiveError = ::WSAGetLastError();
+            if (receiveError == WSAEINTR) {
                 continue;
             }
-
-            if (errno == EAGAIN) {
+            
+            if (receiveError == WSAEWOULDBLOCK) {
                 return {UdpReceiveStatus::NoPacketAvailable, 0};
+            }
+
+            if (receiveError == WSAEMSGSIZE) {
+                return {UdpReceiveStatus::PacketTooLarge, 0};
             }
 
             return {UdpReceiveStatus::SocketError, 0};

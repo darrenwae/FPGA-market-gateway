@@ -1,83 +1,98 @@
 #include "normalizer/transport/udp_sender.hpp"
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
 #include <cstdint>
 #include <cstddef>
-#include <cerrno>
 #include <immintrin.h>
+#include <limits>
+#include <ws2tcpip.h>
 
 namespace normalizer::transport {
 namespace {
-    void closeSocket(int& socketFd) noexcept {
-        if (socketFd >= 0) {
-            ::close(socketFd);
-            socketFd = -1;
+    constexpr unsigned MaxTransientSendRetries{1'000'000};
+
+    void closeSocket(SOCKET& socket) noexcept {
+        if (socket != INVALID_SOCKET) {
+            ::closesocket(socket);
+            socket = INVALID_SOCKET;
         }
     }
-
-    constexpr unsigned MaxTransientSendRetries{1'000'000};
+    
 }
 
-    UdpSender::UdpSender(const char* destIP, std::uint16_t destPort) noexcept {
-        socketFd_ = ::socket(AF_INET,SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC,0);
-        if (socketFd_ < 0) {
+    UdpSender::UdpSender(const char* localIpAddress, const char* destinationIpAddress, std::uint16_t destinationPort) noexcept {
+        socket_ = ::socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+        if (socket_ == INVALID_SOCKET) {
             return;
         }
 
-        sockaddr_in destAddr {};
+        u_long nonblocking{1};
+        if (::ioctlsocket(socket_,static_cast<long>(FIONBIO),&nonblocking) == SOCKET_ERROR) {
+            closeSocket(socket_);
+            return;
+        }
+
+        sockaddr_in hostAddr {};
+        hostAddr.sin_family = AF_INET;
+        hostAddr.sin_port = 0;
+
+        if (::inet_pton(AF_INET,localIpAddress,&hostAddr.sin_addr) != 1) {
+            closeSocket(socket_);
+            return;
+        }
+
+        if (::bind(socket_,reinterpret_cast<const sockaddr*>(&hostAddr),static_cast<int>(sizeof(hostAddr))) == SOCKET_ERROR) {
+            closeSocket(socket_);
+            return;
+        }
+
+        sockaddr_in destAddr{};
         destAddr.sin_family = AF_INET;
-        destAddr.sin_port = htons(destPort);
+        destAddr.sin_port = ::htons(destinationPort);
 
-        const int parseResult = ::inet_pton(AF_INET, destIP, &destAddr.sin_addr);
-        if (parseResult != 1) {
-            closeSocket(socketFd_);
+        if (::inet_pton(AF_INET,destinationIpAddress,&destAddr.sin_addr) != 1) {
+            closeSocket(socket_);
             return;
         }
 
-        const int connectResult = ::connect(socketFd_, reinterpret_cast<const sockaddr*>(&destAddr), static_cast<socklen_t>(sizeof(destAddr)));
-        if (connectResult != 0) {
-            closeSocket(socketFd_);
-            return;
-        } 
-
+        if (::connect(socket_,reinterpret_cast<const sockaddr*>(&destAddr),static_cast<int>(sizeof(destAddr))) == SOCKET_ERROR) {
+            closeSocket(socket_);
+        }
     }
 
+
     UdpSender::~UdpSender() noexcept {
-        closeSocket(socketFd_);
+        closeSocket(socket_);
     }
 
     bool UdpSender::isOpen() const noexcept {
-        return socketFd_ >= 0;
+        return socket_ != INVALID_SOCKET;
     }
 
     bool UdpSender::send(const std::uint8_t* data, std::size_t length) noexcept {
-        if (!isOpen() || data == nullptr || length == 0) {
+        if (!isOpen() || data == nullptr || length == 0 || length > static_cast<std::size_t>(std::numeric_limits<int>::max())) {
             return false;
         }
 
         unsigned transientSendRetries{0};
 
         while(true) {
-            const ssize_t bytesSent = ::send(socketFd_, data, length, 0);
+            const int bytesSent = ::send(socket_, reinterpret_cast<const char*>(data), static_cast<int>(length), 0);
 
-            if (bytesSent < 0) {
-                const int sendError{errno};
-
-                if (sendError == EINTR) {
-                    continue;
-                }
-
-                if ((sendError == EAGAIN || sendError == ENOBUFS) && transientSendRetries < MaxTransientSendRetries) {
-                    ++transientSendRetries;
-                    _mm_pause();
-                    continue;
-                }
-                return false;
+            if (bytesSent != SOCKET_ERROR) {
+                return static_cast<std::size_t>(bytesSent) == length;
             }
 
-            return static_cast<std::size_t>(bytesSent) == length;
+            const int sendError = ::WSAGetLastError();
+            if (sendError == WSAEINTR) {
+                continue;
+            }
+
+            if ((sendError == WSAEWOULDBLOCK || sendError == WSAENOBUFS) && transientSendRetries < MaxTransientSendRetries) {
+                ++transientSendRetries;
+                _mm_pause();
+                continue;
+            }
+
+            return false;
 
         }
     }

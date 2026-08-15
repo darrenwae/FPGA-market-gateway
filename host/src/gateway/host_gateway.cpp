@@ -15,21 +15,22 @@ namespace gateway {
 
     HostGatewayStatus HostGateway::sendStartupConfiguration() {
         const auto commands = commandSource_.startupConfig(0);
-        const auto resetStatus = sendGeneratedMessage(generator_.generateConfigCommand(commands.front()), 0);
-
-        if (resetStatus != HostGatewayStatus::Ok) {
-            return resetStatus;
+        // Supports both a fresh FPGA and recovery after a host-only restart.
+        for (unsigned resetIndex = 0; resetIndex < 2; ++resetIndex) {
+            const auto status = sendGeneratedMessage(generator_.generateConfigCommand(commands.front()), 0);
+            if (status != HostGatewayStatus::Ok) {
+                return status;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds{1});
         }
-
-        // FPGA clears all 16,384 symbol addresses before accepting configuration.
-        std::this_thread::sleep_for(std::chrono::milliseconds{1});
+    
         for (std::size_t index = 1; index < commands.size(); ++index) {
             const auto status = sendGeneratedMessage(generator_.generateConfigCommand(commands[index]), 0);
             if (status != HostGatewayStatus::Ok) {
                 return status;
             }
         }
-        
+    
         return HostGatewayStatus::Ok;
     }
 
@@ -243,6 +244,14 @@ namespace gateway {
 
     std::size_t HostGateway::pendingOrderIntentCount() const noexcept {
         return pendingWriteIndex_ - pendingReadIndex_;
+    }
+
+    std::size_t HostGateway::sentOrderIntentCount() const noexcept {
+        return pendingWriteIndex_;
+    }
+    
+    std::size_t HostGateway::receivedOrderDecisionCount() const noexcept {
+        return pendingReadIndex_;
     }
 
 }

@@ -4,8 +4,11 @@
 #include "normalizer/transport/udp_receiver.hpp"
 #include "normalizer/transport/udp_sender.hpp"
 #include "normalizer/util/endian.hpp"
+#include <winsock2.h>
+#include <windows.h>
+#include <limits>
 #include <cstdint>
-#include <time.h>
+#include <cstddef>
 #include <thread>
 #include <filesystem>
 #include <algorithm>
@@ -17,18 +20,38 @@
 #include <immintrin.h>
 #include <iostream>
 #include <memory>
-#include <pthread.h>
-#include <sched.h>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 namespace {
 
+    class WinsockRuntime {
+        public:
+        WinsockRuntime() noexcept {
+            WSADATA data{};
+            initialized_ = ::WSAStartup(MAKEWORD(2, 2), &data) == 0;
+        }
+        ~WinsockRuntime() noexcept {
+            if (initialized_) {
+                static_cast<void>(::WSACleanup());
+            }
+        }
+        WinsockRuntime(const WinsockRuntime&) = delete;
+        WinsockRuntime& operator=(const WinsockRuntime&) = delete;
+        [[nodiscard]] bool isInitialized() const noexcept {
+            return initialized_;
+        }
+        
+        private:
+        bool initialized_{false};
+    };
+
     constexpr std::size_t SymbolCapacity{16'384};
     constexpr std::size_t ReplayQueueCapacity{1'048'576};
     constexpr std::uint64_t MaxTobBatchDelayNs{1'000};
 
+    constexpr char DownstreamHostIpAddress[]{"192.168.3.1"};
     constexpr char DownstreamFpgaIpAddress[]{"192.168.3.2"};
     constexpr char UpstreamHostIpAddress[]{"192.168.2.1"};
     constexpr char UpstreamFpgaIpAddress[]{"192.168.2.2"};
@@ -56,11 +79,17 @@ namespace {
         interruptRequested = 1;
     }
 
+    double performanceCounterNanosecondsPerTick() noexcept {
+        LARGE_INTEGER frequency{};
+        ::QueryPerformanceFrequency(&frequency);
+        return 1'000'000'000.0 / static_cast<double>(frequency.QuadPart);
+    }
+    
     std::uint64_t monotonicTimeNs() noexcept {
-        timespec timestamp{};
-        ::clock_gettime(CLOCK_MONOTONIC_RAW, &timestamp);
-
-        return (static_cast<std::uint64_t>(timestamp.tv_sec) * 1'000'000'000ULL + static_cast<std::uint64_t>(timestamp.tv_nsec));
+        static const double NanosecondsPerTick{performanceCounterNanosecondsPerTick()};
+        LARGE_INTEGER counter{};
+        ::QueryPerformanceCounter(&counter);
+        return static_cast<std::uint64_t>(static_cast<double>(counter.QuadPart) *NanosecondsPerTick);
     }
 
 
@@ -73,15 +102,11 @@ namespace {
 
 
     bool pinCurrentThread(unsigned cpu) noexcept {
-        if (cpu >= static_cast<unsigned>(CPU_SETSIZE)) {
+        if (cpu >= static_cast<unsigned>(std::numeric_limits<DWORD_PTR>::digits)) {
             return false;
         }
-
-        cpu_set_t cpuSet;
-        CPU_ZERO(&cpuSet);
-        CPU_SET(cpu, &cpuSet);
-
-        return ::pthread_setaffinity_np(::pthread_self(), sizeof(cpuSet), &cpuSet) == 0;
+        const DWORD_PTR affinityMask{DWORD_PTR{1} << cpu};
+        return ::SetThreadAffinityMask(::GetCurrentThread(),affinityMask) != 0;
     }
 
 
@@ -273,6 +298,12 @@ int main(int argc, char** argv) {
         return 1;
     }
 
+    WinsockRuntime winsockRuntime;
+    if (!winsockRuntime.isInitialized()) {
+        std::cerr << "Unable to initialize Winsock\n";
+        return 1;
+    }
+
     unsigned hostCpu{};
     unsigned replayCpu{};
 
@@ -294,7 +325,7 @@ int main(int argc, char** argv) {
     gateway::GatewayConfig gatewayConfig{};
     gatewayConfig.enabledSymbols = std::move(enabledSymbols);
     gateway::OrderIntentPolicy orderPolicy{};
-    normalizer::transport::UdpSender sender{DownstreamFpgaIpAddress,FpgaUdpPort};
+    normalizer::transport::UdpSender sender{DownstreamHostIpAddress,DownstreamFpgaIpAddress,FpgaUdpPort};
     normalizer::transport::UdpReceiver receiver{UpstreamHostIpAddress,HostUdpPort,UpstreamFpgaIpAddress,FpgaUdpPort};
 
     if (!sender.isOpen() || !receiver.isOpen()) {
@@ -423,6 +454,10 @@ int main(int argc, char** argv) {
             << " last_itch_timestamp_ns=" << lastItchTimestamp
             << " pending_order_intents="
             << hostGateway->pendingOrderIntentCount()
+            << " sent_order_intents="
+            << hostGateway->sentOrderIntentCount()
+            << " received_order_decisions="
+            << hostGateway->receivedOrderDecisionCount()
             << '\n';
         return 1;
     }

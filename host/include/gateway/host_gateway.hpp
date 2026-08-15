@@ -47,6 +47,8 @@ namespace gateway {
 
         [[nodiscard]] HostGatewayStatus flushDownstream() noexcept;
         [[nodiscard]] std::size_t pendingOrderIntentCount() const noexcept;
+        [[nodiscard]] std::size_t sentOrderIntentCount() const noexcept;
+        [[nodiscard]] std::size_t receivedOrderDecisionCount() const noexcept;
 
     private:
 
